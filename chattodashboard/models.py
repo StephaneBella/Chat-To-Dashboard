@@ -1,3 +1,24 @@
 from django.db import models
 
 # Create your models here.
+class DimClient(models.Model):
+    SEGMENTS = {
+        "consumer":"Consumer",
+        "corporate":"Corporate",
+        "office":"Home office"
+    }
+
+    client_key = models.IntegerField(primary_key=True)
+    customer_id = models.CharField(max_length=20, unique=True)
+    customer_name = models.CharField(max_length=100)
+    segment = models.CharField(max_length=20,choices=SEGMENTS)
+
+class DimModeExpedition(models.Model):
+
+    MODES = {
+        "first":"First Class",
+        "second":"Second Class",
+        "standard":"Standard Class"
+    }
+    mode_exp_key = models.CharField(primary_key=True)
+    ship_mode = models.CharField(max_length=20, choices=MODES)
