@@ -1,59 +1,49 @@
 import pandas as pd
 
+FRENCH_MONTH_NAMES = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+]
+
+
+def add_sequential_key(dimension, key_name):
+    dimension = dimension.reset_index(drop=True)
+    dimension.insert(0, key_name, dimension.index + 1)
+    return dimension
+
 
 def build_date_dimension(sales):
+    # Continuous calendar covering both order and ship dates
     first_day = min(sales["order_date"].min(), sales["ship_date"].min())
     last_day = max(sales["order_date"].max(), sales["ship_date"].max())
+    calendar_days = pd.Series(pd.date_range(first_day, last_day, freq="D"))
 
-    # Full years so that every month and quarter is complete
-    calendar_days = pd.date_range(
-        start=f"{first_day.year}-01-01",
-        end=f"{last_day.year}-12-31",
-        freq="D",
+    dim_date = pd.DataFrame({
+        "date_key": calendar_days.dt.strftime("%Y%m%d").astype(int),
+        "date": calendar_days.dt.date,
+        "annee": calendar_days.dt.year,
+        "trimestre": calendar_days.dt.quarter,
+    })
+    dim_date["annee_trimestre"] = (
+        dim_date["annee"].astype(str) + "-T" + dim_date["trimestre"].astype(str)
     )
-
-    dim_date = pd.DataFrame({"full_date": calendar_days})
-    dim_date["date_key"] = dim_date["full_date"].dt.strftime("%Y%m%d").astype(int)
-    dim_date["day_of_month"] = dim_date["full_date"].dt.day
-    dim_date["day_of_week"] = dim_date["full_date"].dt.dayofweek + 1
-    dim_date["day_name"] = dim_date["full_date"].dt.day_name()
-    dim_date["week_of_year"] = dim_date["full_date"].dt.isocalendar().week.astype(int)
-    dim_date["month_number"] = dim_date["full_date"].dt.month
-    dim_date["month_name"] = dim_date["full_date"].dt.month_name()
-    dim_date["quarter"] = dim_date["full_date"].dt.quarter
-    dim_date["quarter_label"] = "Q" + dim_date["quarter"].astype(str)
-    dim_date["year"] = dim_date["full_date"].dt.year
-    dim_date["year_month"] = dim_date["full_date"].dt.strftime("%Y-%m")
-    dim_date["is_weekend"] = dim_date["day_of_week"] >= 6
-
-    dim_date["full_date"] = dim_date["full_date"].dt.date
-    first_columns = ["date_key", "full_date"]
-    other_columns = [column for column in dim_date.columns if column not in first_columns]
-    return dim_date[first_columns + other_columns]
+    dim_date["mois"] = calendar_days.dt.month
+    dim_date["annee_mois"] = calendar_days.dt.strftime("%Y-%m")
+    dim_date["nom_mois"] = dim_date["mois"].map(lambda month: FRENCH_MONTH_NAMES[month - 1])
+    dim_date["semaine_iso"] = calendar_days.dt.isocalendar().week.astype(int)
+    dim_date["jour_semaine"] = calendar_days.dt.dayofweek + 1
+    return dim_date
 
 
 def build_product_dimension(sales):
-    # A product_id is not unique in the source: a few ids are shared by two
-    # different product names, so the grain is the (id, name) pair.
-    dim_product = (
-        sales[["product_id", "product_name", "category", "sub_category"]]
-        .drop_duplicates(subset=["product_id", "product_name"])
-        .sort_values(["category", "sub_category", "product_id", "product_name"])
-        .reset_index(drop=True)
-    )
-    dim_product.insert(0, "product_key", dim_product.index + 1)
-    return dim_product
+    # Product ID is not unique in the source: a few ids carry two names
+    dim_produit = sales[["product_id", "product_name", "sub_category", "category"]]
+    dim_produit = dim_produit.drop_duplicates(subset=["product_id", "product_name"])
+    return add_sequential_key(dim_produit, "produit_key")
 
 
 def build_location_dimension(sales):
-    location_columns = ["country", "region", "state", "city", "postal_code"]
-
-    # One postal code can cover two cities, hence the full combination as grain
-    dim_location = (
-        sales[location_columns]
-        .drop_duplicates()
-        .sort_values(location_columns)
-        .reset_index(drop=True)
-    )
-    dim_location.insert(0, "location_key", dim_location.index + 1)
-    return dim_location
+    # A postal code can cover more than one city, so the whole address is the grain
+    dim_localite = sales[["country", "region", "state", "city", "postal_code"]]
+    dim_localite = dim_localite.drop_duplicates()
+    return add_sequential_key(dim_localite, "localite_key")
