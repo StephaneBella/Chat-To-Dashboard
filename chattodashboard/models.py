@@ -3,9 +3,9 @@ from django.db import models
 # Create your models here.
 class DimClient(models.Model):
     SEGMENTS = {
-        "consumer":"Consumer",
-        "corporate":"Corporate",
-        "office":"Home office"
+        "Consumer":"Consumer",
+        "Corporate":"Corporate",
+        "Home office":"Home office"
     }
 
     client_key = models.IntegerField(primary_key=True)
@@ -14,18 +14,18 @@ class DimClient(models.Model):
     segment = models.CharField(max_length=20,choices=SEGMENTS)
 
     class Meta:
-        db_table = "dim_shipping_mode"
-        verbose_name = "Shipping Mode"
-        ordering = ["ship_mode"]
+        db_table = "dim_client"
+        verbose_name = "Client"
+        ordering = ["customer_name"]
 
     def __str__(self):
         return self.customer_name
 
 class DimShippingMode(models.Model):
     MODES = {
-        "first":"First Class",
-        "second":"Second Class",
-        "standard":"Standard Class"
+        "First Class": "First Class",
+        "Second Class": "Second Class",
+        "Standard Class": "Standard Class",
     }
     mode_exp_key = models.CharField(primary_key=True)
     ship_mode = models.CharField(max_length=20, choices=MODES)
