@@ -13,8 +13,15 @@ class DimClient(models.Model):
     customer_name = models.CharField(max_length=100)
     segment = models.CharField(max_length=20,choices=SEGMENTS)
 
-class DimModeExpedition(models.Model):
+    class Meta:
+        db_table = "dim_shipping_mode"
+        verbose_name = "Shipping Mode"
+        ordering = ["ship_mode"]
 
+    def __str__(self):
+        return self.customer_name
+
+class DimShippingMode(models.Model):
     MODES = {
         "first":"First Class",
         "second":"Second Class",
@@ -22,3 +29,11 @@ class DimModeExpedition(models.Model):
     }
     mode_exp_key = models.CharField(primary_key=True)
     ship_mode = models.CharField(max_length=20, choices=MODES)
+
+    class Meta:
+        db_table = "dim_shipping_mode"
+        verbose_name = "Shipping Mode"
+        ordering = ["ship_mode"]
+
+    def __str__(self):
+        return self.ship_mode
