@@ -19,6 +19,14 @@ class FactSales(models.Model):
     shipping_time = models.IntegerField()
     is_sold_at_a_loss = models.BooleanField()
 
+    class Meta:
+        db_table = 'fact_sales'
+        ordering = ['row_id']
+
+    def __str__(self):
+        return f"FactSales({self.row_id})"
+
+
 
 
 class FactOrders(models.Model):
@@ -30,4 +38,10 @@ class FactOrders(models.Model):
     order_profit = models.FloatField()
     number_of_products = models.IntegerField()
     is_sold_at_a_loss = models.BooleanField()
-    
+
+    class Meta:
+        db_table = 'fact_orders'
+        ordering = ['order_id']
+
+    def __str__(self):
+        return f"FactOrders({self.order_id})"
