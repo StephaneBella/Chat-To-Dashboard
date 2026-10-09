@@ -4,28 +4,110 @@ from django.db import models
 
 # 1. FactSales: This model represents the fact sales data.
 class FactSales(models.Model):
+    # Grain: one row per order line
     row_id = models.IntegerField(primary_key=True)
     order_id = models.IntegerField()
-    order_date_key = models.DateField()
-    expiration_date_key = models.DateField()
-    client_key = models.IntegerField()
-    product_key = models.IntegerField()
-    locality_key = models.IntegerField()
-    ship_mode_key = models.IntegerField()
+
+    # Date dimensions
+    order_date = models.ForeignKey(
+        'DimDate', on_delete=models.CASCADE,
+        db_column='order_date_key',
+        related_name="sales_by_order_date",
+        )
+    
+    ship_date = models.ForeignKey(
+        "DimDate",
+        on_delete=models.PROTECT,
+        to_field="date_key",
+        db_column="ship_date_key",
+        related_name="sales_by_ship_date",
+    )
+
+    # Other dimensions
+    client = models.ForeignKey(
+        "DimClient",
+        on_delete=models.PROTECT,
+        db_column="client_key",
+        related_name="sales",
+    )
+
+    product = models.ForeignKey(
+        "DimProduct",
+        on_delete=models.PROTECT,
+        db_column="product_key",
+        related_name="sales",
+    )
+
+    locality = models.ForeignKey(
+        "DimLocation",
+        on_delete=models.PROTECT,
+        db_column="locality_key",
+        related_name="sales",
+    )
+
+    shipping_mode = models.ForeignKey(
+        "DimShippingMode",
+        on_delete=models.PROTECT,
+        db_column="ship_mode_key",
+        related_name="sales",
+    )
+
+    # Measures
     sales = models.FloatField()
     quantity = models.IntegerField()
     discount = models.FloatField()
     profit = models.FloatField()
+    discount_amount = models.FloatField()
+    shipping_time = models.PositiveIntegerField()
+    is_sold_at_a_loss = models.BooleanField()
+
+    class Meta:
+        db_table = 'fact_sales'
+        ordering = ['row_id']
+
+    def __str__(self):
+        return f"FactSales({self.row_id})"
+
+
 
 
 # 2. FactOrders: This model represents the fact orders data.
 class FactOrders(models.Model):
+    # Grain: one row per order
     order_id = models.IntegerField(primary_key=True)
-    order_date_key = models.DateField()
-    client_key = models.IntegerField()
-    ship_mode_key = models.IntegerField()
-    order_sales = models.FloatField()
+
+    order_date = models.ForeignKey(
+        "DimDate",
+        on_delete=models.PROTECT,
+        to_field="date_key",
+        db_column="order_date_key",
+        related_name="orders_by_order_date",
+    )
+    client = models.ForeignKey(
+        "DimClient",
+        on_delete=models.PROTECT,
+        db_column="client_key",
+        related_name="orders",
+    )
+    shipping_mode = models.ForeignKey(
+        "DimShippingMode",
+        on_delete=models.PROTECT,
+        db_column="ship_mode_key",
+        related_name="orders",
+    )
+
+    # Aggregated measures
+    order_sales = models.DecimalField()
     order_profit = models.FloatField()
+    number_of_products = models.PositiveIntegerField()
+    is_sold_at_a_loss = models.BooleanField()
+
+    class Meta:
+        db_table = 'fact_orders'
+        ordering = ['order_id']
+
+    def __str__(self):
+        return f"FactOrders({self.order_id})"
 
 
 # 3. DimDate: This model represents the date dimension data.
@@ -123,7 +205,7 @@ class DimShippingMode(models.Model):
         "Second Class": "Second Class",
         "Standard Class": "Standard Class",
     }
-    mode_exp_key = models.CharField(primary_key=True)
+    ship_mode_key = models.AutoField(primary_key=True)
     ship_mode = models.CharField(max_length=20, choices=MODES)
 
     class Meta:
@@ -133,3 +215,4 @@ class DimShippingMode(models.Model):
 
     def __str__(self):
         return self.ship_mode
+
