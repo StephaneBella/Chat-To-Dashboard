@@ -1,12 +1,14 @@
-import './App.css'
+import { Route, Routes } from "react-router"
+import AgentScreen from "./screens/AgentScreen/AgentScreen"
+import DashboardScreen from "./screens/DashboardScreen/DashboardScreen"
 
 function App() {
 
   return (
-    
-    <h1 className="text-3xl font-bold underline">
-    Hello world!
-  </h1>
+    <Routes>
+       <Route path = "/" element = {<DashboardScreen />}/>
+       <Route path = "/agent" element = {<AgentScreen />}/>
+    </Routes>
   )
 }
 
