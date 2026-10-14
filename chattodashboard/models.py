@@ -10,7 +10,7 @@ class FactSales(models.Model):
 
     # Date dimensions
     order_date = models.ForeignKey(
-        'DimDate', on_delete=models.CASCADE,
+        'DimDate', on_delete=models.PROTECT,
         db_column='order_date_key',
         related_name="sales_by_order_date",
         )
@@ -97,7 +97,7 @@ class FactOrders(models.Model):
     )
 
     # Aggregated measures
-    order_sales = models.DecimalField()
+    order_sales = models.DecimalField(max_digits=12, decimal_places=4)
     order_profit = models.FloatField()
     number_of_products = models.PositiveIntegerField()
     is_sold_at_a_loss = models.BooleanField()
