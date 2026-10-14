@@ -4,8 +4,3 @@ __pycache__/
 *.pyc
 db.sqlite3
 .env
-data/warehouse/*.csv
-"@ | Set-Content .gitignore
-
-git restore --staged db.sqlite3 config/__pycache__ chattodashboard/__pycache__ chattodashboard/migrations/__pycache__
-git add .gitignore

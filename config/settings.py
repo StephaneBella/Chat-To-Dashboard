@@ -122,4 +122,4 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SOURCE_FILE = BASE_DIR/"data"/"source"/"Sample - Superstore.csv"
+SOURCE_FILE = BASE_DIR/"data"/"sources"/"Sample - Superstore.csv"

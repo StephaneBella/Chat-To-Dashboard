@@ -29,7 +29,7 @@ class SourceFileError(Exception):
     pass
 def read_file_source(source_file = None):
     source_file = source_file or settings.SOURCE_FILE
-    raw_sales = pd.read_csv(source_file, encoding= SOURCE_ENCODING, dtypes={"Postal Code":str})
+    raw_sales = pd.read_csv(source_file, encoding= source_encoding, dtype={"Postal Code":str})
     missing_columns = [column for column in columns if column not in raw_sales.columns]
     if missing_columns:
         raise SourceFileError(f"Missing columns in source file: {', '.join(missing_columns)}")

@@ -69,7 +69,7 @@ class DimClient(models.Model):
     SEGMENTS = {
         "Consumer":"Consumer",
         "Corporate":"Corporate",
-        "Home office":"Home office"
+        "Home Office":"Home Office"
     }
 
     client_key = models.IntegerField(primary_key=True)
@@ -90,8 +90,9 @@ class DimShippingMode(models.Model):
         "First Class": "First Class",
         "Second Class": "Second Class",
         "Standard Class": "Standard Class",
+        "Same Day": "Same Day",
     }
-    mode_exp_key = models.CharField(primary_key=True)
+    mode_exp_key = models.IntegerField(primary_key=True)
     ship_mode = models.CharField(max_length=20, choices=MODES)
 
     class Meta:
@@ -105,11 +106,11 @@ class DimShippingMode(models.Model):
 class FactSales(models.Model):
     row_id = models.IntegerField(primary_key=True)
     order_id = models.CharField(max_length=50)
-    order_date_key = models.DateField()
-    expiration_date_key = models.DateField()
+    order_date_key = models.IntegerField()
+    ship_date_key = models.IntegerField()
     client_key = models.IntegerField()
     product_key = models.IntegerField()
-    locality_key = models.IntegerField()
+    location_key = models.IntegerField()
     ship_mode_key = models.IntegerField()
     sales = models.FloatField()
     quantity = models.IntegerField()
@@ -132,7 +133,7 @@ class FactSales(models.Model):
 
 class FactOrders(models.Model):
     order_id = models.CharField(max_length=50, primary_key=True)
-    order_date_key = models.DateField()
+    order_date_key = models.IntegerField()
     client_key = models.IntegerField()
     ship_mode_key = models.IntegerField()
     order_sales = models.FloatField()
