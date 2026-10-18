@@ -1,30 +1,26 @@
-from django.shortcuts import render
-from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from .serializers import DashboardQuerySerializer
 from .services.aggregations import get_chart_data, get_dashboard_options, get_kpi_cards
 
 
 # Create your views here.
-@require_GET
-def static_dashboard_view(request):
+class StaticDashboardView(APIView):
     """
-    GET /dashboard/?kpi=profit_margin&dimension=shipping_mode&year=2017
-    Warning : the dimension "client" (waterfall) only works with additive metrics (sales, profit, quantity). For a KPI, the API returns a 400 error.
+    GET api/static-dashboard/?kpi=profit_margin&dimension=shipping_mode&year=2017
     """
 
-    kpi = request.GET.get("kpi", "profit_margin")
-    dimension = request.GET.get("dimension", "time")
-    year = request.GET.get("year")
+    def get(self, request):
+        params = DashboardQuerySerializer(data=request.query_params)
+        params.is_valid(raise_exception=True) # Return automatically a detailled 400.
+        p = params.validated_data
 
-    try:
-        year = int(year) if year else None
-        data = {
-            "options": get_dashboard_options(),
-            "kpi_cards": get_kpi_cards(year),
-            "chart": get_chart_data(kpi, dimension, year),
-        }
-    except ValueError as exc:
-        return JsonResponse({"error": str (exc)}, status=400)
-
-    return JsonResponse(data)
+        year = p.get("year")
+        return Response(
+            {
+                "options": get_dashboard_options(),
+                "kpi_cards": get_kpi_cards(year),
+                "chart": get_chart_data(p["kpi"], p["dimension"], year),
+            }
+        ) 
