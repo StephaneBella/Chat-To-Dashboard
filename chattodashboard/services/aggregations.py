@@ -1,4 +1,4 @@
-from django.db.models import Avg, Count, ExpressionWrapper, F, Q, FloatField, Sum, Value
+from django.db.models import Count, ExpressionWrapper, F, Q, FloatField, Sum, Value
 from django.db.models.functions import NullIf
 
 from ..models import FactSales, FactOrders
@@ -13,16 +13,12 @@ KPIs = {
         "label": "Taux de marge bénéficiaire",
         "agg": ExpressionWrapper(Sum("profit") * 100.0 / NullIf(Sum("sales"), Value(0.0)), output_field=FloatField()),
         "unit": "%",
-        "kind": "kpi",
-        "additive": False,
     },
 
     "weighted_discount": {
         "label": "Taux de remise moyen pondéré",
         "agg": ExpressionWrapper(Sum(F("sales") * F("discount")) * 100.0 / NullIf(Sum("sales"), Value(0.0)), output_field=FloatField(),),
         "unit": "%",
-        "kind": "kpi",
-        "additive": False,
     },
 
     "loss_order_rate": {
@@ -32,22 +28,22 @@ KPIs = {
             / NullIf(Count("order_id", distinct=True), Value(0)), output_field=FloatField(),
         ),
         "unit": "%",
-        "kind": "kpi",
-        "additive": False,
     },
-
-    # -- Measures --
-    "sales": {"label": "Chiffre d'affaires", "agg": Sum("sales"), "unit": "$", "kind": "metric", "additive": True},
-    "profit": {"label": "Profit", "agg": Sum("profit"), "unit": "$", "kind": "metric", "additive": True},
-    "quantity": {"label": "Quantité vendue", "agg": Sum("quantity"), "unit": "", "kind": "metric", "additive": True},
 }
 
+
+# Metrics : measures only displayed through cards
+METRICS = {
+    # -- Measures --
+    "Total_sales": {"label": "Chiffre d'affaires total", "agg": Sum("sales"), "unit": "$"},
+    "total_discount": {"label": "Montant total des remises", "agg": Sum("discount_amount"), "unit": "$"},
+}
 
 DIMENSIONS = {
     "client": {
         "label": "Segment client",
         "field": "client__segment",
-        "chart_type": "waterfall",
+        "chart_type": "bar_vertical",
     },
 
     "shipping_mode": {
@@ -59,7 +55,7 @@ DIMENSIONS = {
     "location": {
         "label": "Région",
         "field": "locality__region",
-        "chart_type": "donut",
+        "chart_type": "bar_horizontal",
     },
     "product": {
         "label": "Sous-catégorie de produit",
@@ -76,91 +72,73 @@ DIMENSIONS = {
 # 2. Utils
 def base_query_set(year=None):
     """Base Queryset for the fact table (grain = order line)."""
-    qs = FactSales.objects.all()
-    if year:
-        qs = qs.filter(order_date__year=year)
-    return qs
+    return FactSales.objects.all()
 
 def _round(value, digits=2):
     return round(value, digits) if value is not None else 0
 
 # 3. Section 1 : KPIs cards
-CARD_KPIS = ["profit_margin", "weighted_discount", "loss_order_rate"]
 
-def get_kpi_cards(year=None):
+def get_summary_cards():
     """Three kpis cards: CA total, profit total, nombre de commandes."""
-    qs = base_query_set(year)
-    totals = qs.aggregate(**{k: KPIs[k]["agg"] for k in CARD_KPIS})
-    return [
-        {
-            "key": k,
-            "label": KPIs[k]["label"],
-            "value": _round(totals[k]),
-            "unit": KPIs[k]["unit"],
+    totals = base_query_set().aggregate(
+        **{k: v["agg"] for k, v in KPIs.items()},
+        **{k: v["agg"] for k, v in METRICS.items()},
+    )
+
+    def to_card(key, cfg):
+        return {
+            "key": key,
+            "label": cfg["label"],
+            "value": _round(totals[key]),
+            "unit": cfg["unit"],
         }
-        for k in CARD_KPIS
-    ]
+    
+    return {
+        "kpi_cards": [to_card(k, v) for k, v in KPIs.items()],
+        "metrics_cards": [to_card(k, v) for k, v in METRICS.items()],
+    }
 
 
-# 4. Section 2 : generic request + constructors per chart type
-def aggregate_by_dimension(kpi_cfg, dim_cfg, year=None):
+# 4. Section 2 : chart per dimension
+def aggregate_by_dimension(kpi_cfg, dim_cfg):
     """Return one list of tuples (label, value) grouped by dimension"""
-    qs = (base_query_set(year).values(label=F(dim_cfg["field"])).annotate(value=kpi_cfg["agg"]))
+    qs = (
+        base_query_set().values(label=F(dim_cfg["field"]))
+        .annotate(value=kpi_cfg["agg"])
+    )
 
-    # Time : chronological order
+    # Time : chronogical order
     qs = qs.order_by("label") if dim_cfg["chart_type"] == "line" else qs.order_by("-value")
     return [(r["label"], _round(r["value"])) for r in qs]
 
 
-def build_waterfall(rows, kpi_cfg):
-    labels = [r[0] for r in rows]
-    values = [r[1] for r in rows]
+def build_vertical(rows, kpi_cfg, dim_cfg):
+    """Categories in X, horizontal values in Y (barres verticales, count plot, courbe)."""
     return {
-        "x_axis": {"label": "Segment", "data": labels + ["Total"]},
-        "y_axis": {"label": kpi_cfg["label"], "data": values + [_round(sum(values))]},
-        # Format compatible with plotly : "relative" = floating bar, "total" = "final bar"
-        "measure": ["relative"] * len(values) + ["total"],
+        "x_axis": {"label": dim_cfg["label"], "data": [r[0] for r in rows]},
+        "y_axis": {"label": kpi_cfg["label"], "data": [r[1] for r in rows]},
     }
 
-def build_bar_horizontal(rows, kpi_cfg):
+
+def build_horizontal(rows, kpi_cfg, dim_cfg):
     # Horizontal bars : categories in the Y axis, values in the X axis
     return {
         "x_axis": {"label": kpi_cfg["label"], "data": [r[1] for r in rows]},
-        "y_axis": {"label": "Mode de livraison", "data": [r[0] for r in rows]},
+        "y_axis": {"label": dim_cfg["label"], "data": [r[0] for r in rows]},
     }
 
-def build_donut(rows, kpi_cfg):
-    values = [r[1] for r in rows]
-    total = sum(values)
-    return {
-        "labels": [r[0] for r in rows],
-        "values": values,
-        "percentages": [_round(v * 100 / total) if total else 0 for v in values],
-    }
-
-def build_count_plot(rows, kpi_cfg):
-    return {
-        "x_axis": {"label": "Sous-catégorie", "data": [r[0] for r in rows]},
-        "y_axis": {"label": kpi_cfg["label"], "data": [r[1] for r in rows]},
-    }
-
-def build_line(rows, kpi_cfg):
-    return {
-        "x_axis": {"label": "Mois", "data": [r[0] for r in rows]},
-        "y_axis": {"label": kpi_cfg["label"], "data": [r[1] for r in rows]},
-    }
 
 CHART_BUILDERS = {
-    "waterfall": build_waterfall,
-    "bar_horizontal": build_bar_horizontal,
-    "donut": build_donut,
-    "count_plot": build_count_plot,
-    "line": build_line,
+    "bar_vertical": build_vertical,
+    "count_plot": build_vertical,
+    "line": build_vertical,
+    "bar_horizontal": build_horizontal,
 }
 
 
 def get_chart_data(kpi, dimension, year=None):
-    """Entry point for section 2 : provides the dict ready for the frontend."""
+    """One chart for (kpi, dimension)"""
     if kpi not in KPIs:
         raise ValueError(f"KPI inconnu: '{kpi}'. Valeurs possibles : {list(KPIs)}")
     if dimension not in DIMENSIONS:
@@ -170,10 +148,7 @@ def get_chart_data(kpi, dimension, year=None):
     dim_cfg = DIMENSIONS[dimension]
     chart_type = dim_cfg["chart_type"]
 
-    if chart_type == "waterfall" and not kpi_cfg["aditive"]:
-        raise ValueError(f"Le KPI '{kpi}' n'est pas additif : impossible de l'afficher en waterfall.")
-
-    rows = aggregate_by_dimension(kpi_cfg, dim_cfg, year)
+    rows = aggregate_by_dimension(kpi_cfg, dim_cfg)
 
     return {
         "chart_type": chart_type,
@@ -182,8 +157,17 @@ def get_chart_data(kpi, dimension, year=None):
         "unit": kpi_cfg["unit"],
         "dimension": dimension,
         "dimension_label": dim_cfg["label"],
-        **CHART_BUILDERS[chart_type](rows, kpi_cfg),
+        **CHART_BUILDERS[chart_type](rows, kpi_cfg, dim_cfg),
     }
+
+
+def get_all_charts(kpi):
+    """The five dashboard's charts for the same KPI"""
+    return {
+        dim: get_chart_data(kpi, dim) 
+        for dim in DIMENSIONS
+    }
+
 
 def get_dashboard_options():
     """To animate frontend drop-down lists."""
@@ -192,9 +176,7 @@ def get_dashboard_options():
             {
                 "key": k, 
                 "label": v["label"], 
-                "unit": v["unit"], 
-                "kind": v["kind"],
-                "additive": v["additive"],  
+                "unit": v["unit"],   
             }
              for k, v in KPIs.items()],
         
