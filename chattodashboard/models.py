@@ -6,7 +6,7 @@ from django.db import models
 class FactSales(models.Model):
     # Grain: one row per order line
     row_id = models.IntegerField(primary_key=True)
-    order_id = models.IntegerField()
+    order_id = models.CharField(max_length=20, db_index=True)
 
     # Date dimensions
     order_date = models.ForeignKey(
@@ -41,7 +41,7 @@ class FactSales(models.Model):
     locality = models.ForeignKey(
         "DimLocation",
         on_delete=models.PROTECT,
-        db_column="locality_key",
+        db_column="localion_key",
         related_name="sales",
     )
 
@@ -56,6 +56,7 @@ class FactSales(models.Model):
     sales = models.FloatField()
     quantity = models.IntegerField()
     discount = models.FloatField()
+    discount_tranche = models.CharField(max_length=20)
     profit = models.FloatField()
     discount_amount = models.FloatField()
     shipping_time = models.PositiveIntegerField()
@@ -74,7 +75,7 @@ class FactSales(models.Model):
 # 2. FactOrders: This model represents the fact orders data.
 class FactOrders(models.Model):
     # Grain: one row per order
-    order_id = models.IntegerField(primary_key=True)
+    order_id = models.CharField(max_length = 20, primary_key=True)
 
     order_date = models.ForeignKey(
         "DimDate",
@@ -97,7 +98,7 @@ class FactOrders(models.Model):
     )
 
     # Aggregated measures
-    order_sales = models.DecimalField(max_digits=12, decimal_places=4)
+    order_sales = models.FloatField()
     order_profit = models.FloatField()
     number_of_products = models.PositiveIntegerField()
     is_sold_at_a_loss = models.BooleanField()
@@ -181,7 +182,7 @@ class DimClient(models.Model):
     SEGMENTS = {
         "Consumer":"Consumer",
         "Corporate":"Corporate",
-        "Home office":"Home office"
+        "Home Office":"Home Office"
     }
 
     client_key = models.IntegerField(primary_key=True)
@@ -215,4 +216,3 @@ class DimShippingMode(models.Model):
 
     def __str__(self):
         return self.ship_mode
-
