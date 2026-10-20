@@ -69,6 +69,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
+# Default CSV used fot the ETL process 
+SOURCE_FILE = BASE_DIR / "data" / "sources" / "Sample - Superstore.csv"
+
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
@@ -146,3 +150,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SOURCE_FILE = BASE_DIR/"data"/"sources"/"Sample - Superstore.csv"
+
+LOGIN_REDIRECT_URL = '/api/'
+
+LOGOUT_REDIRECT_URL = '/api-auth/login/'
+LOGIN_URL = '/api-auth/login/'

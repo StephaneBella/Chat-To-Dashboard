@@ -2,7 +2,7 @@ import pandas as pd
 
 
 format_data = "%m/%d/%Y"
-months= ["Janvier", "Fevrier", "Mars", "Avril", "Mai", "Juin", "Juilet", "Aout",
+months= ["Janvier", "Fevrier", "Mars", "Avril", "Mai", "Juin", "Juillet", "Aout",
          "Septembre", "Octobre", "Novembre", "Decembre"]
 
 DISCOUNT_BINS = [-1, 0, 0.10, 0.20, 0.30, 0.50, 1]
@@ -30,7 +30,7 @@ def create_dim_date(sales):
     dim_date["month"] = dim_date["date"].dt.month
     dim_date["year_month"] = dim_date["date"].dt.strftime("%Y-%m")
     dim_date["month_name"] = dim_date["month"].apply(lambda month: months[month - 1])
-    dim_date["iso_week"] = dim_date["date"].dt.isocalendar().week
+    dim_date["iso_week"] = dim_date["date"].dt.isocalendar().week.astype(int)
     dim_date["weekday"] = dim_date["date"].dt.dayofweek + 1
     dim_date["date"] = dim_date["date"].dt.date
     return dim_date
@@ -46,7 +46,7 @@ def create_dim_location(sales):
     return create_dimension(sales, ["country", "region", "state", "city", "postal_code"], "location_key")
 
 def create_dim_shipping_mode(sales):
-    return create_dimension(sales, ["ship_mode"], "mode_exp_key")
+    return create_dimension(sales, ["ship_mode"], "ship_mode_key")
 
 def create_fact_sales(sales, dim_client, dim_product, dim_location, dim_shipping_mode):
     fact_sales = sales.merge(dim_client, on=["customer_id", "customer_name", "segment"])
@@ -56,7 +56,7 @@ def create_fact_sales(sales, dim_client, dim_product, dim_location, dim_shipping
 
     fact_sales["order_date_key"] = fact_sales["order_date"].dt.strftime("%Y%m%d").astype(int)
     fact_sales["ship_date_key"] = fact_sales["ship_date"].dt.strftime("%Y%m%d").astype(int)
-    fact_sales["ship_mode_key"] = fact_sales["mode_exp_key"]
+    #fact_sales["ship_mode_key"] = fact_sales["mode_exp_key"]
     fact_sales["discount_tranche"] = pd.cut(fact_sales["discount"], bins=DISCOUNT_BINS, labels=DISCOUNT_LABELS).astype(str)
     fact_sales["discount_amount"] = fact_sales["sales"] * fact_sales["discount"]
     fact_sales["shipping_time"] = (fact_sales["ship_date"] - fact_sales["order_date"]).dt.days.clip(lower=0)

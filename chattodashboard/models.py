@@ -11,6 +11,7 @@ class FactSales(models.Model):
     # Date dimensions
     order_date = models.ForeignKey(
         'DimDate', on_delete=models.PROTECT,
+        to_field="date_key",
         db_column='order_date_key',
         related_name="sales_by_order_date",
         )
@@ -41,7 +42,7 @@ class FactSales(models.Model):
     locality = models.ForeignKey(
         "DimLocation",
         on_delete=models.PROTECT,
-        db_column="localion_key",
+        db_column="location_key",
         related_name="sales",
     )
 
@@ -134,7 +135,7 @@ class DimDate(models.Model):
 
 # 4. DimProduct: This model represents the product dimension data.
 class DimProduct(models.Model):
-    product_key = models.AutoField(primary_key=True, db_column="produit_key")
+    product_key = models.IntegerField(primary_key=True, db_column="produit_key")
     # Not unique in the source: the same id can carry two product names
     product_id = models.CharField(max_length=20)
     product_name = models.CharField(max_length=255)
@@ -156,7 +157,7 @@ class DimProduct(models.Model):
 
 # 5. DimLocation: This model represents the location dimension data.
 class DimLocation(models.Model):
-    location_key = models.AutoField(primary_key=True, db_column="localite_key")
+    location_key = models.IntegerField(primary_key=True, db_column="localite_key")
     country = models.CharField(max_length=100)
     region = models.CharField(max_length=50)
     state = models.CharField(max_length=100)
@@ -206,8 +207,8 @@ class DimShippingMode(models.Model):
         "Second Class": "Second Class",
         "Standard Class": "Standard Class",
     }
-    ship_mode_key = models.AutoField(primary_key=True)
-    ship_mode = models.CharField(max_length=20, choices=MODES)
+    ship_mode_key = models.IntegerField(primary_key=True)
+    ship_mode = models.CharField(max_length=20, choices=MODES, unique=True)
 
     class Meta:
         db_table = "dim_shipping_mode"
