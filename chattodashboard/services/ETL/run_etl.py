@@ -72,7 +72,7 @@ def prepare_sales(source_file, mode):
     already_loaded = new["order_id"].isin(set(existing["order_id"]))
     fresh = new[~already_loaded].copy()
     stats.update(
-        rows_added=len(fresh)
+        rows_added=len(fresh),
         rows_skipped=int(already_loaded.sum()),
         orders_skipped=int(new.loc[already_loaded, "order_id"].nunique()),
     )
