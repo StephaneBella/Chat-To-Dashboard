@@ -155,3 +155,5 @@ LOGIN_REDIRECT_URL = '/api/'
 
 LOGOUT_REDIRECT_URL = '/api-auth/login/'
 LOGIN_URL = '/api-auth/login/'
+
+AGENT_CHECKPOINT_DB = BASE_DIR / "agent_checkpoints.sqlite3"

@@ -1,4 +1,6 @@
 from django.db import models
+from django.conf import settings
+import uuid
 
 # Create your models here.
 
@@ -217,3 +219,44 @@ class DimShippingMode(models.Model):
 
     def __str__(self):
         return self.ship_mode
+
+
+
+
+# ChatThread, makes the API more secured by avoiding context leakage between chats
+class ChatThread(models.Model):
+    """One conversation. It's id is the thread_id for the chackpointer."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="chat_threads")
+    title = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return self.title or str(self.id)
+
+
+class AgentMemory(models.Model):
+    """Long term memory, for one user."""
+
+    KINDS = {
+        "preference": "Préférence",
+        "validated_query": "Requete validée",
+    }
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="agent_memories")
+    kind = models.CharField(max_length=20, choices=KINDS)
+    content = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "kind", "content"], name="unique_memory_per_user"),
+        ]
+
+    def __str__(self):
+        return f"[{self.kind}] {self.content[:50]}"

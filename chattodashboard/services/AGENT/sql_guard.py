@@ -1,0 +1,1 @@
+"""SQL validation & read only connexion"""
