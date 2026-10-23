@@ -46,14 +46,25 @@ function axisTitle(field?: FieldSpec): string | undefined {
  */
 function gridLayout(
   spec: Spec,
-  { legend = false, xName = true }: { legend?: boolean; xName?: boolean } = {},
+  {
+    legend = false,
+    xName = true,
+    topName = false,
+  }: { legend?: boolean; xName?: boolean; topName?: boolean } = {},
 ) {
-  // Even without a title, keep room for the vertical axis name (default
-  // position: just above the grid). This is still far tighter than the old
-  // fixed 64px margin.
-  const top = spec.title ? (spec.subtitle ? 58 : 44) : legend ? 32 : 24;
+  const top = spec.title
+    ? spec.subtitle
+      ? 58
+      : 44
+    : legend
+      ? 32
+      : topName
+        ? 28
+        : 16;
   return {
-    left: 8,
+    // containLabel already reserves room for the tick labels; `left` is only
+    // the outer gutter that holds the rotated vertical axis name.
+    left: 16,
     right: 16,
     top,
     bottom: xName ? 46 : 30,
@@ -76,6 +87,24 @@ function horizontalName(field?: FieldSpec) {
     name: axisTitle(field),
     nameLocation: "middle" as const,
     nameGap: 26,
+  };
+}
+
+/**
+ * Draw a y-axis name horizontally above the grid, aligned with the axis line.
+ * Both the rotated "end" placement (names grow past the top edge) and the
+ * centred placement (names sit on top of the tick labels) are unreadable.
+ */
+function topAxisName(field?: FieldSpec) {
+  return {
+    name: axisTitle(field),
+    nameLocation: "end" as const,
+    nameRotate: 0,
+    nameGap: 8,
+    nameTextStyle: {
+      align: "left" as const,
+      verticalAlign: "bottom" as const,
+    },
   };
 }
 
@@ -104,24 +133,41 @@ function buildCartesianOption(spec: Spec, data: Row[]): EChartsOption {
   const categoryAxis = {
     type: "category" as const,
     data: categories,
-    name: axisTitle(xSpec),
   };
 
-  const valueAxis = (format?: FieldSpec["format"]) => ({
+  // The static dashboard has no chart title/legend (the card header plays
+  // that role), so there is room for the horizontal y-axis name above the
+  // grid. When the agent sends a title or a legend, that space is taken.
+  const showYName = !spec.title && options.legend === false;
+
+  const valueAxis = (
+    field?: FieldSpec,
+    format?: FieldSpec["format"],
+    withName = true,
+  ) => ({
     type: "value" as const,
-    name: axisTitle(ySpecs[0]),
+    ...(showYName && withName ? topAxisName(field) : {}),
     axisLabel: {
       formatter: (value: number) => formatValue(value, format ?? "number"),
     },
   });
 
   const axes = dualAxis
-    ? [valueAxis(ySpecs[0]?.format), valueAxis(ySpecs[1]?.format)]
-    : [valueAxis(ySpecs[0]?.format)];
+    ? [
+        valueAxis(ySpecs[0], ySpecs[0]?.format, !horizontal),
+        valueAxis(ySpecs[1], ySpecs[1]?.format, false),
+      ]
+    : [valueAxis(ySpecs[0], ySpecs[0]?.format, !horizontal)];
 
   const xAxis = horizontal
     ? { ...axes[0], ...horizontalName(ySpecs[0]) }
     : { ...categoryAxis, ...horizontalName(xSpec) };
+  const yAxis = horizontal
+    ? {
+        ...categoryAxis,
+        ...(showYName ? topAxisName(xSpec) : {}),
+      }
+    : axes;
 
   return {
     title: { text: spec.title, subtext: spec.subtitle },
@@ -134,9 +180,10 @@ function buildCartesianOption(spec: Spec, data: Row[]): EChartsOption {
     grid: gridLayout(spec, {
       legend: options.legend ?? true,
       xName: Boolean(axisTitle(horizontal ? ySpecs[0] : xSpec)),
+      topName: showYName,
     }),
     xAxis,
-    yAxis: horizontal ? categoryAxis : axes,
+    yAxis,
     series: series.map((s) => {
       // The per-field render hint is what makes "bar + line" possible.
       const render = s.render ?? (isBar ? "bar" : "line");
@@ -210,7 +257,7 @@ function buildScatterOption(spec: Spec, data: Row[]): EChartsOption {
         xName: Boolean(axisTitle(xSpec)),
       }),
       xAxis: { type: "value", ...horizontalName(xSpec) },
-      yAxis: { type: "value", name: axisTitle(ySpec) },
+      yAxis: { type: "value" },
       series: [...groups.entries()].map(([name, points]) => ({
         name,
         type: "scatter" as const,
@@ -222,9 +269,15 @@ function buildScatterOption(spec: Spec, data: Row[]): EChartsOption {
   return {
     title: { text: spec.title },
     tooltip: { trigger: "item" },
-    grid: gridLayout(spec, { xName: Boolean(axisTitle(xSpec)) }),
+    grid: gridLayout(spec, {
+      xName: Boolean(axisTitle(xSpec)),
+      topName: !spec.title,
+    }),
     xAxis: { type: "value", ...horizontalName(xSpec) },
-    yAxis: { type: "value", name: axisTitle(ySpec) },
+    yAxis: {
+      type: "value",
+      ...(!spec.title ? topAxisName(ySpec) : {}),
+    },
     series: [
       {
         type: "scatter",
@@ -267,7 +320,10 @@ function buildHeatmapOption(spec: Spec, data: Row[]): EChartsOption {
         formatValue(value, valueSpec?.format ?? "number"),
     },
     grid: {
-      ...gridLayout(spec, { xName: Boolean(axisTitle(xSpec)) }),
+      ...gridLayout(spec, {
+        xName: Boolean(axisTitle(xSpec)),
+        topName: !spec.title,
+      }),
       bottom: 58,
     },
     xAxis: {
@@ -279,7 +335,7 @@ function buildHeatmapOption(spec: Spec, data: Row[]): EChartsOption {
     yAxis: {
       type: "category",
       data: yCategories,
-      name: axisTitle(ySpec),
+      ...(!spec.title ? topAxisName(ySpec) : {}),
       splitArea: { show: true },
     },
     visualMap: {
@@ -439,11 +495,11 @@ function buildWaterfallOption(spec: Spec, data: Row[]): EChartsOption {
       },
     },
     legend: { show: false },
-    grid: gridLayout(spec, { xName: false }),
+    grid: gridLayout(spec, { xName: false, topName: !spec.title }),
     xAxis: { type: "category", data: axisCategories },
     yAxis: {
       type: "value",
-      name: axisTitle(ySpec),
+      ...(!spec.title ? topAxisName(ySpec) : {}),
       axisLabel: {
         formatter: (value: number) => formatValue(value, format),
       },
@@ -664,9 +720,15 @@ function buildBubbleOption(spec: Spec, data: Row[]): EChartsOption {
     title: { text: spec.title, subtext: spec.subtitle },
     tooltip: { trigger: "item" },
     legend: { show: false },
-    grid: gridLayout(spec, { xName: Boolean(axisTitle(xSpec)) }),
+    grid: gridLayout(spec, {
+      xName: Boolean(axisTitle(xSpec)),
+      topName: !spec.title,
+    }),
     xAxis: { type: "value", ...horizontalName(xSpec) },
-    yAxis: { type: "value", name: axisTitle(ySpec) },
+    yAxis: {
+      type: "value",
+      ...(!spec.title ? topAxisName(ySpec) : {}),
+    },
     series: [
       {
         type: "scatter",
