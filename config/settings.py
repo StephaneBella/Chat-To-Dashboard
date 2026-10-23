@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -150,6 +151,12 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SOURCE_FILE = BASE_DIR/"data"/"sources"/"Sample - Superstore.csv"
+
+# Shared with the frontend: the single source of truth for chart types.
+CHART_CATALOG_PATH = os.environ.get(
+    "CHART_CATALOG_PATH",
+    BASE_DIR / "frontend" / "src" / "chart-engine" / "contract" / "chartCatalog.json",
+)
 
 LOGIN_REDIRECT_URL = '/api/'
 
