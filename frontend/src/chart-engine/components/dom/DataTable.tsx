@@ -24,9 +24,9 @@ export function DataTable({ spec, data }: DataTableProps) {
   const columns = columnsFor(spec, data);
 
   return (
-    <div className="h-full min-h-64 overflow-auto rounded-lg border border-slate-200">
+    <div className="h-full min-h-64 overflow-auto rounded-lg border border-outline-variant/60">
       <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 bg-slate-100 text-slate-600">
+        <thead className="sticky top-0 bg-surface-container-high text-on-surface-variant">
           <tr>
             {columns.map((col) => (
               <th key={col} className="px-4 py-2 font-semibold">
@@ -37,9 +37,9 @@ export function DataTable({ spec, data }: DataTableProps) {
         </thead>
         <tbody>
           {data.map((row, i) => (
-            <tr key={i} className="border-t border-slate-100">
+            <tr key={i} className="border-t border-outline-variant/50">
               {columns.map((col) => (
-                <td key={col} className="px-4 py-2">
+                <td key={col} className="px-4 py-2 text-on-surface-variant">
                   {typeof row[col] === "number"
                     ? formatValue(row[col], spec.options?.format ?? "number")
                     : String(row[col] ?? "")}

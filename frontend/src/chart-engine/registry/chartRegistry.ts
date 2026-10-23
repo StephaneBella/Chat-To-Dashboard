@@ -1,7 +1,6 @@
 import type { ChartType } from "../contract";
 import type { ChartComponent } from "./types";
 import { EChartsChart } from "../components/EChartsChart";
-import { UnsupportedChart } from "../components/UnsupportedChart";
 import { KpiCard } from "../components/dom/KpiCard";
 import { DataTable } from "../components/dom/DataTable";
 
@@ -17,7 +16,12 @@ export const chartRegistry: Record<ChartType, ChartComponent> = {
   scatter: EChartsChart,
   pie: EChartsChart,
   donut: EChartsChart,
-  heatmap: UnsupportedChart,
+  heatmap: EChartsChart,
+  waterfall: EChartsChart,
+  gauge: EChartsChart,
+  funnel: EChartsChart,
+  radar: EChartsChart,
+  bubble: EChartsChart,
   kpi: KpiCard,
   table: DataTable,
 };

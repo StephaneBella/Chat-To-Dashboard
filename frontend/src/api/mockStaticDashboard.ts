@@ -38,7 +38,7 @@ const KPI_ORDER = ["profit_margin", "weighted_discount", "loss_order_rate"];
 
 const METRICS: Record<string, { label: string; unit: string; base: number; spread: number }> =
   {
-    Total_sales: {
+    total_sales: {
       label: "Chiffre d'affaires total",
       unit: "$",
       base: 2297200,

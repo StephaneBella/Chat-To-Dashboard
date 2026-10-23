@@ -1,38 +1,29 @@
-import { Link } from "react-router";
+import { Link } from "react-router-dom";
 
 export function ChatLauncher() {
   return (
     <Link
       to="/agent"
       id="open-chat-launcher"
-      className="fixed bottom-6 right-8 z-40 flex items-center gap-3 px-5 py-3.5 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-600 hover:to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-950/40 border border-blue-400/30 backdrop-blur transition-all duration-200 hover:scale-[1.02] cursor-pointer group"
+      className="group fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 px-4 py-3 text-white shadow-2xl shadow-emerald-900/30 ring-1 ring-white/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-emerald-900/40 sm:right-8 sm:px-5 sm:py-3.5"
     >
-      <div className="relative">
-        <span className="block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-      </div>
-      <svg
-        className="w-5 h-5 text-blue-200 group-hover:rotate-12 transition-transform"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-      </svg>
-      <div className="text-left">
-        <div className="text-xs font-semibold text-white tracking-wide flex items-center gap-1.5">
-          Poser une question à l'IA
-          <span className="text-blue-200 font-normal">
-            • Insights instantanés
+      <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
+        <span className="material-symbols-outlined text-[20px]">
+          forum
+        </span>
+        <span className="animate-pulse-ring absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-lime-300 ring-2 ring-emerald-600" />
+      </span>
+      <span className="text-left">
+        <span className="flex items-center gap-1.5 text-[13px] font-bold leading-tight">
+          Poser une question à l&apos;IA
+          <span className="material-symbols-outlined text-[15px] text-lime-200 transition-transform duration-300 group-hover:translate-x-0.5">
+            arrow_forward
           </span>
-        </div>
-        <div className="text-[11px] text-blue-200/80">
-          Ouvrir l'espace d'analyse &amp; chat Claude-split →
-        </div>
-      </div>
+        </span>
+        <span className="block text-[11px] leading-tight text-emerald-50/80">
+          Insights instantanés sur vos données
+        </span>
+      </span>
     </Link>
   );
 }

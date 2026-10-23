@@ -1,70 +1,73 @@
 import * as echarts from "echarts";
 
-export const STITCH_DARK_THEME = "stitch-dark";
+/** Name of the registered ECharts theme used by every chart. */
+export const CHART_THEME = "superstore-green";
 
 let registered = false;
 
-export function registerStitchTheme(): void {
+/** Registers the light green theme once, before any chart is created. */
+export function registerChartTheme(): void {
   if (registered) return;
   registered = true;
 
-  echarts.registerTheme(STITCH_DARK_THEME, {
+  echarts.registerTheme(CHART_THEME, {
     color: [
-      "#4edea3",
-      "#38bdf8",
-      "#a855f7",
-      "#ffb95f",
-      "#ffb4ab",
-      "#adc6ff",
-      "#60a5fa",
-      "#ec4899",
+      "#0f7a4d",
+      "#10b981",
+      "#14b8a6",
+      "#0ea5e9",
+      "#f59e0b",
+      "#8b5cf6",
+      "#f43f5e",
+      "#84cc16",
     ],
     backgroundColor: "transparent",
     textStyle: {
-      color: "#dae2fd",
+      color: "#0f2419",
       fontFamily: "Inter, sans-serif",
     },
     title: {
-      textStyle: { color: "#ffffff", fontSize: 16, fontWeight: 600 },
-      subtextStyle: { color: "#8c909f", fontSize: 12 },
+      textStyle: { color: "#0b1f15", fontSize: 16, fontWeight: 700 },
+      subtextStyle: { color: "#6b8576", fontSize: 12 },
     },
     legend: {
-      textStyle: { color: "#c2c6d6", fontSize: 12 },
-      pageTextStyle: { color: "#8c909f" },
+      textStyle: { color: "#44604f", fontSize: 12 },
+      pageTextStyle: { color: "#6b8576" },
     },
     tooltip: {
-      backgroundColor: "rgba(34, 42, 61, 0.95)",
-      borderColor: "#424754",
+      backgroundColor: "rgba(255, 255, 255, 0.97)",
+      borderColor: "#d4e5d9",
       borderWidth: 1,
-      padding: [8, 12],
-      textStyle: { color: "#dae2fd", fontSize: 12 },
-      extraCssText: "border-radius: 8px; backdrop-filter: blur(8px);",
+      padding: [10, 14],
+      textStyle: { color: "#0f2419", fontSize: 12 },
+      extraCssText:
+        "border-radius: 12px; box-shadow: 0 18px 40px -18px rgba(15,36,25,.35);",
     },
     categoryAxis: {
-      axisLine: { lineStyle: { color: "#424754" } },
-      axisTick: { lineStyle: { color: "#424754" } },
-      axisLabel: { color: "#8c909f" },
+      axisLine: { lineStyle: { color: "#d4e5d9" } },
+      axisTick: { lineStyle: { color: "#d4e5d9" } },
+      axisLabel: { color: "#6b8576" },
       splitLine: { show: false },
-      nameTextStyle: { color: "#8c909f" },
+      nameTextStyle: { color: "#6b8576" },
     },
     valueAxis: {
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: "#8c909f" },
-      splitLine: { lineStyle: { color: "rgba(148, 163, 184, 0.08)" } },
-      nameTextStyle: { color: "#8c909f" },
+      axisLabel: { color: "#6b8576" },
+      splitLine: { lineStyle: { color: "rgba(15, 36, 25, 0.07)" } },
+      nameTextStyle: { color: "#6b8576" },
     },
     line: {
       symbolSize: 7,
       lineStyle: { width: 3 },
-      itemStyle: { borderWidth: 2, borderColor: "#0b1326" },
+      itemStyle: { borderWidth: 2, borderColor: "#ffffff" },
     },
     bar: {
       barMaxWidth: 56,
-      itemStyle: { borderRadius: 4 },
+      itemStyle: { borderRadius: 6 },
     },
     pie: {
-      itemStyle: { borderColor: "#0b1326", borderWidth: 2 },
+      itemStyle: { borderColor: "#ffffff", borderWidth: 2 },
     },
   });
 }

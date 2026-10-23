@@ -5,19 +5,30 @@ export {
   toNumber,
   buildCartesian,
   buildCategorical,
+  buildMatrix,
+  buildBubble,
+  buildRadar,
   formatValue,
   formatFromUnit,
   toEChartsOption,
   staticDashboardToEnvelope,
+  agentChartToEnvelope,
 } from "./adapter";
-export type { ReshapedData, ReshapedSeries, CategoricalDatum } from "./adapter";
+export type {
+  ReshapedData,
+  ReshapedSeries,
+  CategoricalDatum,
+  ReshapedMatrix,
+  ReshapedBubble,
+  ReshapedRadar,
+} from "./adapter";
 export { ChartRenderer } from "./components/ChartRenderer";
 export type { ChartRendererProps } from "./components/ChartRenderer";
 export { EChart } from "./components/EChart";
 export { ErrorCard } from "./components/states/ErrorCard";
 export { EmptyState } from "./components/states/EmptyState";
 export { LoadingState } from "./components/states/LoadingState";
-export { STITCH_DARK_THEME, registerStitchTheme } from "./theme";
+export { CHART_THEME, registerChartTheme } from "./theme";
 export { chartRegistry, getChartComponent } from "./registry/chartRegistry";
 export type { ChartComponent, ChartComponentProps } from "./registry/chartRegistry";
 export {

@@ -1,10 +1,29 @@
 import type { KpiCard as KpiCardData } from "../../api/staticDashboard";
 import { formatFromUnit, formatValue } from "../../chart-engine";
-import { ACCENT_BORDER, ACCENT_DOT, ACCENT_GLOW, KPI_ACCENT } from "./cells";
+import {
+  ACCENT_BAR,
+  ACCENT_BORDER,
+  ACCENT_DOT,
+  ACCENT_GLOW,
+  ACCENT_TILE,
+  KPI_ACCENT,
+} from "./cells";
+
+const KPI_ICON: Record<string, string> = {
+  profit_margin: "trending_up",
+  weighted_discount: "percent",
+  loss_order_rate: "shield",
+};
+
+const KPI_TAG: Record<string, string> = {
+  profit_margin: "Rentabilité",
+  weighted_discount: "Politique prix",
+  loss_order_rate: "Risque",
+};
 
 const METRIC_ICON: Record<string, string> = {
-  Total_sales: "point_of_sale",
-  total_discount: "percent",
+  total_sales: "point_of_sale",
+  total_discount: "sell",
 };
 
 export function KpiCards({
@@ -17,49 +36,70 @@ export function KpiCards({
   loading: boolean;
 }) {
   return (
-    <div className="space-y-4">
+    <div id="kpis" className="scroll-mt-24 space-y-4">
       {cards.length === 0 ? (
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {[0, 1, 2].map((slot) => (
             <div
               key={slot}
-              className="bg-surface-container rounded-2xl p-5 border border-outline-variant/30 shadow-md flex flex-col justify-between gap-4 min-h-[110px]"
+              className="flex min-h-[150px] flex-col justify-between gap-4 rounded-2xl border border-outline-variant/60 bg-white p-5 shadow-soft"
             >
               <div
-                className={`h-3 w-2/3 rounded bg-surface-container-high ${loading ? "animate-pulse" : ""}`}
+                className={`h-3 w-2/3 rounded-full bg-surface-container-high ${loading ? "shimmer" : ""}`}
               />
               <div
-                className={`h-8 w-1/2 rounded bg-surface-container-high ${loading ? "animate-pulse" : ""}`}
+                className={`h-9 w-1/2 rounded-full bg-surface-container-high ${loading ? "shimmer" : ""}`}
               />
             </div>
           ))}
         </section>
       ) : (
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cards.map((card) => {
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {cards.map((card, index) => {
             const accent = KPI_ACCENT[card.key] ?? "primary";
             return (
               <div
                 key={card.key}
-                className={`bg-surface-container rounded-2xl p-5 border border-outline-variant/30 shadow-md transition-all group flex flex-col justify-between relative overflow-hidden ${ACCENT_BORDER[accent]}`}
+                className={`animate-fade-up group relative flex min-h-[150px] flex-col justify-between overflow-hidden rounded-2xl border border-outline-variant/60 bg-white p-5 shadow-soft card-lift ${ACCENT_BORDER[accent]}`}
+                style={{ animationDelay: `${index * 70}ms` }}
               >
-                <div
-                  className={`absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-xl transition-colors pointer-events-none ${ACCENT_GLOW[accent]}`}
+                <span
+                  className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${ACCENT_BAR[accent]}`}
                 />
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[13px] text-on-surface-variant font-medium">
-                      {card.label}
-                    </span>
+                <div
+                  className={`pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-2xl transition-colors ${ACCENT_GLOW[accent]}`}
+                />
+
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
                     <span
-                      className={`w-2 h-2 rounded-full ${ACCENT_DOT[accent]}`}
-                    />
-                  </div>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl lg:text-4xl font-bold text-white tracking-tight font-sans tabular-nums">
-                      {formatValue(card.value, formatFromUnit(card.unit))}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${ACCENT_TILE[accent]}`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {KPI_ICON[card.key] ?? "insights"}
+                      </span>
                     </span>
+                    <div>
+                      <p className="text-[12px] font-semibold leading-tight text-on-surface-variant">
+                        {card.label}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-outline">
+                        {KPI_TAG[card.key] ?? "Indicateur"}
+                      </p>
+                    </div>
                   </div>
+                  <span
+                    className={`mt-1 h-2 w-2 shrink-0 rounded-full ${ACCENT_DOT[accent]}`}
+                  />
+                </div>
+
+                <div className="relative mt-4 flex items-end justify-between gap-2">
+                  <span className="font-display text-3xl font-extrabold leading-none tracking-tight text-on-surface tabular-nums lg:text-[34px]">
+                    {formatValue(card.value, formatFromUnit(card.unit))}
+                  </span>
+                  <span className="mb-0.5 rounded-lg bg-surface-container-high px-2 py-1 text-[10px] font-semibold text-outline">
+                    période
+                  </span>
                 </div>
               </div>
             );
@@ -68,21 +108,24 @@ export function KpiCards({
       )}
 
       {metrics.length > 0 && (
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {metrics.map((metric) => (
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {metrics.map((metric, index) => (
             <div
               key={metric.key}
-              className="bg-surface-container/50 rounded-xl px-4 py-3 border border-outline-variant/20 flex items-center justify-between gap-3"
+              className="animate-fade-up flex items-center justify-between gap-3 rounded-2xl border border-outline-variant/60 bg-white/80 px-4 py-3 shadow-soft"
+              style={{ animationDelay: `${200 + index * 70}ms` }}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="material-symbols-outlined text-[18px] text-primary">
-                  {METRIC_ICON[metric.key] ?? "insights"}
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-container text-primary">
+                  <span className="material-symbols-outlined text-[18px]">
+                    {METRIC_ICON[metric.key] ?? "insights"}
+                  </span>
                 </span>
-                <span className="text-[12px] text-on-surface-variant truncate">
+                <span className="truncate text-[12px] font-medium text-on-surface-variant">
                   {metric.label}
                 </span>
               </div>
-              <span className="text-base font-semibold text-white tabular-nums font-mono whitespace-nowrap">
+              <span className="whitespace-nowrap font-mono text-[15px] font-semibold tabular-nums text-on-surface">
                 {formatValue(metric.value, formatFromUnit(metric.unit))}
               </span>
             </div>

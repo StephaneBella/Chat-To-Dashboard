@@ -18,11 +18,13 @@ export function KpiCard({ spec, data }: KpiCardProps) {
       : formatValue(value, ySpec?.format ?? spec.options?.format ?? "number");
 
   return (
-    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white p-6">
-      <span className="text-sm font-medium uppercase tracking-wide text-slate-500">
+    <div className="flex h-full min-h-64 flex-col items-center justify-center gap-1 rounded-lg border border-outline-variant/60 bg-white p-6">
+      <span className="text-sm font-medium uppercase tracking-wide text-outline">
         {spec.title ?? ySpec?.title ?? ySpec?.field ?? "KPI"}
       </span>
-      <span className="text-5xl font-bold text-slate-800">{display}</span>
+      <span className="font-display text-5xl font-extrabold text-on-surface">
+        {display}
+      </span>
     </div>
   );
 }

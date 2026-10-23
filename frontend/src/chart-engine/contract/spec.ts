@@ -21,6 +21,9 @@ export const FieldSpecSchema = z.object({
     format: FieldFormatSchema.optional(),
     aggregate: AggregateSchema.optional(),
     axis: z.enum(["left","right"]).optional(),
+    // how this field must be drawn inside a cartesian chart.
+    // "bar" and "line" mixed on the same chart = the bar_line / histogram_line variants.
+    render: z.enum(["bar","line","area","scatter"]).optional(),
 })
 export type FieldSpec = z.infer<typeof FieldSpecSchema>;
 
@@ -39,7 +42,8 @@ export type OptionalFieldSpec = z.infer<typeof OptionalFieldSpecSchema>
 
 //chart types
 export const ChartTypeSchema = z.enum(["line","area","bar","hbar",
-    "stackedBar","groupedBar","pie","donut","kpi","table","scatter","heatmap"
+    "stackedBar","groupedBar","pie","donut","kpi","table","scatter","heatmap",
+    "waterfall","gauge","funnel","radar","bubble"
 ])
 export type ChartType = z.infer<typeof ChartTypeSchema>;
 
@@ -50,7 +54,7 @@ export const EncodingSchema = z.object({
     series: OptionalFieldSpecSchema, // grouping(s)
     value: OptionalFieldSpecSchema,
     label: OptionalFieldSpecSchema,
-
+    size: OptionalFieldSpecSchema, // bubble size
 });
 export type Encoding = z.infer<typeof EncodingSchema>
 
@@ -64,6 +68,9 @@ export const OptionsSchema = z.object({
     seriesSeparator: z.string().optional(), // how multi group names are joined
     format: FieldFormatSchema.optional(),
     sort: z.enum(["none","asc","desc"]).optional(),
+    barGap: z.number().min(0).max(1).optional(), // 0 = bars touch (histogram)
+    target: z.number().optional(), // gauge: the goal to reach
+    waterfallMode: z.enum(["contributions","bridge"]).optional(),
 });
 export type Options = z.infer<typeof OptionsSchema>;
 
@@ -116,6 +123,26 @@ export const SpecSchema = z.object({
         break;
       case "table":
       case "scatter":
+        break;
+      case "waterfall":
+        needs(!has(spec.encoding.x), "x");
+        needs(!has(spec.encoding.y), "y");
+        break;
+      case "gauge":
+        needs(!has(spec.encoding.y), "y");
+        break;
+      case "funnel":
+        needs(!has(spec.encoding.value), "value");
+        needs(!has(spec.encoding.label), "label");
+        break;
+      case "radar":
+        needs(!has(spec.encoding.x), "x");
+        needs(!has(spec.encoding.y), "y");
+        break;
+      case "bubble":
+        needs(!has(spec.encoding.x), "x");
+        needs(!has(spec.encoding.y), "y");
+        needs(!has(spec.encoding.size), "size");
         break;
     }
   });

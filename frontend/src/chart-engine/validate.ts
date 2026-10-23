@@ -40,6 +40,7 @@ function encodedFields(spec: Spec): string[] {
     spec.encoding.series,
     spec.encoding.value,
     spec.encoding.label,
+    spec.encoding.size,
   ];
   for (const channel of channels) {
     if (channel == null) continue;

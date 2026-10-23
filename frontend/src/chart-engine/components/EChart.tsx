@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
-import { registerStitchTheme } from "../theme";
+import { registerChartTheme } from "../theme";
 
 export interface EChartProps {
   option: EChartsOption;
@@ -16,7 +16,7 @@ export function EChart({ option, height = 320, theme }: EChartProps) {
   // (Re)create whenever the theme changes, destroy on unmount.
   useEffect(() => {
     if (!containerRef.current) return;
-    registerStitchTheme();
+    registerChartTheme();
     const chart = echarts.init(containerRef.current, theme);
     chartRef.current = chart;
 
