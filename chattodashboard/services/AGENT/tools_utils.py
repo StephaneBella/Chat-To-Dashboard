@@ -214,7 +214,7 @@ def drop_none(value):
     return value
 
 
-def round(value, digits=2):
+def round_(value, digits=2):
     return round(float(value), digits) if value is not None else 0
 
 

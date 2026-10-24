@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework.generics import GenericAPIView
 
 
 from .models import ChatThread
@@ -62,7 +63,7 @@ class StaticDashboardView(APIView):
             }
         ) 
 
-class ETLRefreshView(APIView):
+class ETLRefreshView(GenericAPIView):
     """
     POST /api/etl/refresh/   (multipart/form-data, optional field "file")
 
@@ -70,11 +71,12 @@ class ETLRefreshView(APIView):
     - with a csv : replace all the DW by the new file's content (only for admin)
     """
 
+    serializer_class = ETLRefreshSerializer
     permission_classes = [IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        serializer = ETLRefreshSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         mode = serializer.validated_data["mode"]
         uploaded = serializer.validated_data.get("file")
@@ -117,7 +119,7 @@ class ETLRefreshView(APIView):
 
 
 # Chat
-class ChatView(APIView):
+class ChatView(GenericAPIView):
     """
     POST /api/chat/   {"message": "...", "thread_id": "<uuid, optionnel>"}
 
@@ -125,14 +127,15 @@ class ChatView(APIView):
     frontend read the lines via /api/chat/threads/<thread_id>/results/<chart.result_id>/.
     """
 
+    serializer_class = ChatRequestSerializer
     permission_classes = [IsAuthenticated]  # No user, no memory
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "chat"
 
     def post(self, request):
-        params = ChatRequestSerializer(data=request.data)
+        params = self.get_serializer(data=request.data)
         params.is_valid(raise_exception=True)
-        message = params.validated_data.get("thread_id")
+        message = params.validated_data["message"]
         thread_id = params.validated_data.get("thread_id")
 
         try:

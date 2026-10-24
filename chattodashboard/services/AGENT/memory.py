@@ -59,7 +59,7 @@ def delete_thread(thread):
 # 2. Long Term memory : Django Table
 class LongTermMemory:
     def __init__(self, user_id):
-        self.qs = AgentMemory.object.filter(user_id=user_id)
+        self.qs = AgentMemory.objects.filter(user_id=user_id)
         self.user_id = user_id
 
     def save(self, kind, content):

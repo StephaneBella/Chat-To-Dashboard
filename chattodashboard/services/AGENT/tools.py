@@ -14,7 +14,7 @@ from .sql_guard import TIMEOUT_MS, check_query, run_readonly
 from .tools_utils import (
     MAX_KPI_ROWS, KPI_REGISTRY, DIMENSIONS, DIMENSION_COLUMNS,
     ERR_EXPIRED, rows_as_dicts, check_columns, check_numeric, 
-    check_x_role,read_sections, to_json, base_query_set, round, 
+    check_x_role,read_sections, to_json, base_query_set, round_, 
     variant, load_result, check_points, apply_readability, 
     save_derived, keep_for_chart, push_chart, drop_none
 )
