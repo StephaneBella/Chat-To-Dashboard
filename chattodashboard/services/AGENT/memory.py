@@ -26,7 +26,7 @@ def thread_config(thread_id, user_id):
     """Config to share to agent.invoke(), user_id is useful for memory tools."""
     return {"configurable": {"thread_id": str(thread_id), "user_id": user_id}}
 
-def text_(content):
+def message_text(content):
     """A message content is actually a char or a bloc list"""
     if isinstance(content, str):
         return content
@@ -41,7 +41,7 @@ def get_history(thread_id):
     
     for m in tup.checkpoint["channel_values"].get("messages", []):
         if isinstance(m, (HumanMessage, AIMessage)):
-            text = text_(m.content).strip()
+            text = message_text(m.content).strip()
             #ignore the tools call messages witouth text
             if text:
                 history.append({"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": text})

@@ -32,3 +32,11 @@ class ETLRefreshSerializer(serializers.Serializer):
         if attrs["mode"] == "append" and "file" not in attrs:
             raise serializers.ValidationError({"file": "Un fichier CSV est requis en mode 'append'."})
         return attrs
+
+
+
+class ChatRequestSerializer(serializers.Serializer):
+    """Valid POST /api/chat/."""
+
+    message = serializers.CharField(max_length=2000)  # Also refuse empty messages
+    thread_id = serializers.UUIDField(required=False) # Absent = New chat
