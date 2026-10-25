@@ -227,7 +227,7 @@ def make_chart_tool(
     if not thread_id:
         return {"error": "Conversation non identifiée."}
 
-    variant, error = variant(chart_type)
+    variant1, error = variant(chart_type)
     if error:
         return error
 
@@ -238,13 +238,13 @@ def make_chart_tool(
 
     measures = list(y_columns) if y_columns else [y_column]
 
-    error = check_columns(result, variant, x_column, measures, series_column, size_column)
+    error = check_columns(result, variant1, x_column, measures, series_column, size_column)
     if error:
         return error
     error = check_numeric(result, measures)
     if error:
         return error
-    error = check_x_role(result, variant, x_column)
+    error = check_x_role(result, variant1, x_column)
     if error:
         return error
     error = check_points(result, x_column)

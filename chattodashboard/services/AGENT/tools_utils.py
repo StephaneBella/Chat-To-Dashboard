@@ -75,7 +75,7 @@ def to_json(value):
 # ========================== UTILS FOR kpi_tool & chart_tool ====================================
 
 @lru_cache(maxsize=1)
-def catalog():
+def catalog_func():
     """The frontend catalogue indexed by chart id, loaded only once."""
     with open(settings.CHART_CATALOG_PATH, encoding="utf-8") as file:
         data = json.load(file)
@@ -86,7 +86,7 @@ def catalog():
 def variant(chart_type):
     """The catalogue entry for 'chart_type', or a ready-to-return error."""
     try:
-        catalog = catalog()
+        catalog = catalog_func()
     except (OSError, ValueError) as exc:
         return None, {"error": f"Catalogue indisponible : {exc}"}
     variant = catalog.get(chart_type)
