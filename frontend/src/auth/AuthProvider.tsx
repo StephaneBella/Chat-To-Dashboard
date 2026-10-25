@@ -36,41 +36,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("loading");
     try {
       const authed = await checkSession();
-      if (authed) {
-        setStatus("authed");
-      } else {
-        // Auto-login for dev
-        const devUser = "brenda";
-        const devPass = "Teafy91106*";
+      if (!authed) {
+        setUsername(null);
         try {
-          await apiLogin(devUser, devPass);
-          try {
-            localStorage.setItem(USERNAME_KEY, devUser);
-          } catch {
-            // ignore
-          }
-          setUsername(devUser);
-          setStatus("authed");
-          return;
+          localStorage.removeItem(USERNAME_KEY);
         } catch {
-          // try common defaults
-          try {
-            await apiLogin("admin", "admin");
-            try {
-              localStorage.setItem(USERNAME_KEY, "admin");
-            } catch {
-              // ignore
-            }
-            setUsername("admin");
-            setStatus("authed");
-            return;
-          } catch {
-            setStatus("authed"); // bypass for now
-          }
+          // ignore
         }
       }
+      setStatus(authed ? "authed" : "anon");
     } catch {
-      setStatus("authed"); // bypass for now
+      setUsername(null);
+      try {
+        localStorage.removeItem(USERNAME_KEY);
+      } catch {
+        // ignore
+      }
+      setStatus("anon");
     }
   }, []);
 

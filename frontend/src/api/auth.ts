@@ -1,4 +1,4 @@
-import { ApiError, requestForm, requestJson } from "./http";
+import { ApiError, getCsrfToken, requestForm, requestJson } from "./http";
 
 export interface LoginResult {
   ok: boolean;
@@ -26,6 +26,10 @@ export async function login(
   password: string,
 ): Promise<LoginResult> {
   await getLoginPageForCsrf();
+  const csrfToken = getCsrfToken();
+  if (!csrfToken) {
+    throw new ApiError(403, "Impossible d’obtenir le jeton CSRF. Rechargez la page puis réessayez.");
+  }
   const form = new FormData();
   form.append("username", username);
   form.append("password", password);
@@ -35,6 +39,7 @@ export async function login(
     const response = await fetch("/api-auth/login/", {
       method: "POST",
       body: form,
+      headers: { "X-CSRFToken": csrfToken },
       credentials: "include",
       redirect: "manual",
     });
