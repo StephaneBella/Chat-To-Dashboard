@@ -107,11 +107,11 @@ LOGOUT_REDIRECT_URL = '/api-auth/login/'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "chat_to_bi_dw"),
+        "NAME": os.getenv("DB_NAME", "Chat_To_BI_DW"),
         "USER": os.getenv("DB_USER", "postgres"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "91106"),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
         "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),  # PostgreSQL default is 5432
+        "PORT": os.getenv("DB_PORT", "5433"),  # PostgreSQL default is 5432
     }
 }
 
