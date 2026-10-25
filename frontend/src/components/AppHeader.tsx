@@ -1,4 +1,5 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 
 const NAV_ITEMS = [
   { to: "/", label: "Tableau de bord", icon: "space_dashboard", end: true },
@@ -6,6 +7,14 @@ const NAV_ITEMS = [
 ];
 
 export function AppHeader() {
+  const { status, username, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[72px] glass border-b border-outline-variant/60">
       <div className="mx-auto flex h-full w-full max-w-[1600px] items-center justify-between gap-3 px-4 lg:px-8">
@@ -75,15 +84,21 @@ export function AppHeader() {
               </span>
             </div>
           </div>
-          {/* <Link
-            to="/agent"
-            className="hidden items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3.5 py-2.5 text-[12px] font-semibold text-white shadow-lg shadow-primary/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 sm:flex"
-          >
-            <span className="material-symbols-outlined text-[17px]">
-              auto_awesome
-            </span>
-            Nouvelle analyse
-          </Link> */}
+          {status === "authed" ? (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-xl border border-outline-variant/60 bg-white/80 px-3 py-2 text-[12px] font-semibold text-on-surface-variant shadow-sm transition-colors hover:text-primary"
+            >
+              <span className="material-symbols-outlined text-[17px]">
+                logout
+              </span>
+              <span className="hidden sm:inline">
+                {username ? username : "Déconnexion"}
+              </span>
+            </button>
+          ) : (
+            <span className="hidden sm:inline text-[11px] text-outline">Invité</span>
+          )}
         </div>
       </div>
     </header>

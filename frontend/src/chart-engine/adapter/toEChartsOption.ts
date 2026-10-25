@@ -12,27 +12,44 @@ import {
 import { formatValue } from "./format";
 
 export function toEChartsOption(spec: Spec, data: Row[]): EChartsOption {
+  const chartSpec: Spec = {
+    ...spec,
+    options: { ...spec.options, legend: false },
+  };
+  let option: EChartsOption;
+
   switch (spec.chartType) {
     case "pie":
     case "donut":
-      return buildPieOption(spec, data);
+      option = buildPieOption(chartSpec, data);
+      break;
     case "scatter":
-      return buildScatterOption(spec, data);
+      option = buildScatterOption(chartSpec, data);
+      break;
     case "heatmap":
-      return buildHeatmapOption(spec, data);
+      option = buildHeatmapOption(chartSpec, data);
+      break;
     case "waterfall":
-      return buildWaterfallOption(spec, data);
+      option = buildWaterfallOption(chartSpec, data);
+      break;
     case "gauge":
-      return buildGaugeOption(spec, data);
+      option = buildGaugeOption(chartSpec, data);
+      break;
     case "funnel":
-      return buildFunnelOption(spec, data);
+      option = buildFunnelOption(chartSpec, data);
+      break;
     case "radar":
-      return buildRadarOption(spec, data);
+      option = buildRadarOption(chartSpec, data);
+      break;
     case "bubble":
-      return buildBubbleOption(spec, data);
+      option = buildBubbleOption(chartSpec, data);
+      break;
     default:
-      return buildCartesianOption(spec, data);
+      option = buildCartesianOption(chartSpec, data);
+      break;
   }
+
+  return { ...option, legend: { show: false } };
 }
 
 function axisTitle(field?: FieldSpec): string | undefined {

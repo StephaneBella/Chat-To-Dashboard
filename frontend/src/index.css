@@ -234,9 +234,20 @@
   animation: pulse-ring 2.4s ease-out infinite;
 }
 
-.dot-bounce {
-  animation: dot-bounce 1.2s infinite ease-in-out;
-}
+  .dot-bounce {
+    animation: dot-bounce 1.2s infinite ease-in-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
