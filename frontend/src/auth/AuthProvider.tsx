@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("authed");
       } else {
         // Auto-login for dev
-        const devUser = "brenda";
-        const devPass = "Teafy91106*";
+        const devUser = "stephane";
+        const devPass = "Paradigme_177";
         try {
           await apiLogin(devUser, devPass);
           try {

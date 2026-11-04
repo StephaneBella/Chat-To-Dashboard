@@ -1,4 +1,9 @@
-import { ApiError, requestForm, requestJson } from "./http";
+import {
+  ApiError,
+  getCsrfToken,
+  requestForm,
+  requestJson,
+} from "./http";
 
 export interface LoginResult {
   ok: boolean;
@@ -21,42 +26,66 @@ async function getLoginPageForCsrf(): Promise<void> {
   }
 }
 
+
 export async function login(
   username: string,
   password: string,
 ): Promise<LoginResult> {
   await getLoginPageForCsrf();
+
   const form = new FormData();
   form.append("username", username);
   form.append("password", password);
   form.append("next", "/agent");
 
+  const headers = new Headers({
+    Accept: "text/html",
+  });
+
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers.set("X-CSRFToken", csrfToken);
+  }
+
+  let response: Response;
+
   try {
-    const response = await fetch("/api-auth/login/", {
+    response = await fetch("/api-auth/login/", {
       method: "POST",
       body: form,
+      headers,
       credentials: "include",
-      redirect: "manual",
+      redirect: "follow",
     });
-
-    if (response.type === "opaqueredirect" || response.status === 302 || response.status === 301) {
-      return { ok: true, redirected: true };
-    }
-    if (response.ok && response.redirected) {
-      return { ok: true, redirected: true };
-    }
-
-    // Some Django setups return 200 on failed login with form
-    const text = await response.text();
-    if (text.toLowerCase().includes("error") || text.toLowerCase().includes("erreur")) {
-      throw new ApiError(401, "Identifiants incorrects.");
-    }
-    throw new ApiError(401, "Connexion échouée. Vérifiez vos identifiants.");
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(0, "Impossible de se connecter au serveur.");
+  } catch {
+    throw new ApiError(
+      0,
+      "Impossible de se connecter au serveur.",
+    );
   }
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      "Connexion échouée. Vérifiez vos identifiants.",
+    );
+  }
+
+  const authenticated = await checkSession();
+
+  if (!authenticated) {
+    throw new ApiError(
+      401,
+      "Django ne reconnaît pas la session après la connexion.",
+    );
+  }
+
+  return {
+    ok: true,
+    redirected: response.redirected,
+  };
 }
+
 
 export async function logout(): Promise<void> {
   const form = new FormData();
