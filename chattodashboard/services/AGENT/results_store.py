@@ -2,10 +2,11 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+import threading
 
 from django.core.cache import caches
 
-PREVIEW_ROWS = 5        # lines provides to the LLM
+PREVIEW_ROWS = 30        # lines provides to the LLM
 MAX_STORED_ROWS = 200   # the sam limit as run_sql
 RESULT_TTL = 60 * 60    # 1 hour
 CHART_RESULT_TTL = 24 * 60 * 60   # A result displayed by a chart is for 24 hours
@@ -32,7 +33,7 @@ def json_safe(value):
 
 
 def result_key(thread_id, result_id):
-    return f"result:{thread_id}: {result_id}"
+    return f"result:{thread_id}:{result_id}"
 
 
 # 1. Data result
@@ -115,10 +116,14 @@ def keep_for_chart(thread_id, result_id):
 def chart_key(thread_id):
     return f"charts:{thread_id}"
 
+
+_chart_lock = threading.Lock() 
+
 def push_chart(thread_id, spec):
-    charts = cache().get(chart_key(thread_id), [])
-    charts.append(spec)
-    cache().set(chart_key(thread_id), charts, CHART_TTL)
+    with _chart_lock:
+        charts = cache().get(chart_key(thread_id), [])
+        charts.append(spec)
+        cache().set(chart_key(thread_id), charts, CHART_TTL)
 
 
 def pop_charts(thread_id):

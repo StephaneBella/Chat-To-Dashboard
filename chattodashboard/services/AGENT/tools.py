@@ -7,16 +7,19 @@ import re
 from django.db import DatabaseError
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
-from .memory import user_id_, KINDS, LongTermMemory
 
-from .results_store import MAX_STORED_ROWS, store_and_preview, thread_id_from
+from ..aggregations import aggregate_by_dimension
+from .memory import KINDS, LongTermMemory, user_id_
+from .results_store import (
+    ERR_EXPIRED, MAX_STORED_ROWS, keep_for_chart, load_result, push_chart,
+    rows_as_dicts, save_derived, store_and_preview, thread_id_from,
+)
 from .sql_guard import TIMEOUT_MS, check_query, run_readonly
 from .tools_utils import (
-    MAX_KPI_ROWS, KPI_REGISTRY, DIMENSIONS, DIMENSION_COLUMNS,
-    ERR_EXPIRED, rows_as_dicts, check_columns, check_numeric, 
-    check_x_role,read_sections, to_json, base_query_set, round_, 
-    variant, load_result, check_points, apply_readability, 
-    save_derived, keep_for_chart, push_chart, drop_none
+    DIMENSION_COLUMNS, DIMENSIONS, KPI_REGISTRY, MAX_KPI_ROWS,
+    apply_readability, base_query_set, check_columns, check_numeric, check_points,
+    check_x_role, drop_none, get_variant, read_sections, release_db_connections,
+    round_, to_json,
 )
 
 from ..aggregations import aggregate_by_dimension
@@ -61,6 +64,7 @@ def get_schema_tool(table: str | None = None) -> str:
 # ============================ TOOL 2 : run_sql =======================================================
 
 @tool("run_sql")
+@release_db_connections
 def run_sql_tool(query: str, config: RunnableConfig = None) -> dict:
     """Exécute une requête SQL en lecture seule sur l'entrepôt. À utiliser uniquement quand get_kpi
     ne répond pas à la question, et après avoir consulté get_schema.
@@ -117,6 +121,7 @@ def run_sql_tool(query: str, config: RunnableConfig = None) -> dict:
 
 # ============================ TOOL 3 : memory_search_tool =======================================================
 @tool("memory_search")
+@release_db_connections
 def memory_search_tool(query: str, kind: str | None = None, config: RunnableConfig = None) -> list[dict] | str:
     """Searches the user's long-term memory using natural language.
     Useful for retrieving an SQL query that has already been validated for a similar question.
@@ -135,6 +140,7 @@ def memory_search_tool(query: str, kind: str | None = None, config: RunnableConf
 
 # ============================ TOOL 4 : memory_save_tool =======================================================
 @tool("memory_save")
+@release_db_connections
 def memory_save_tool(kind: str, content: str, config: RunnableConfig = None) -> dict | str:
     """Stores persistent information for future conversations.
     kind 'preference': the user's stable preference (format, unit, tone).
@@ -156,6 +162,7 @@ def memory_save_tool(kind: str, content: str, config: RunnableConfig = None) -> 
 
 # ============================ TOOL 5 : get_kpi_tool =======================================================
 @tool("get_kpi")
+@release_db_connections
 def get_kpi_tool(kpi: str, dimension: str | None = None, config: RunnableConfig = None) -> dict:
     """Calcule un KPI ou une métrique officiels, avec les mêmes formules que le dashboard.
     À utiliser EN PREMIER pour toute question sur la marge, la remise ou les commandes à perte.
@@ -174,24 +181,24 @@ def get_kpi_tool(kpi: str, dimension: str | None = None, config: RunnableConfig 
         return {"error": "Conversation non identifiée : impossible d'enregistrer le résultat."}
     if kpi not in KPI_REGISTRY:
         return {"error": f"KPI inconnu : '{kpi}'. Valeurs possibles : {list(KPI_REGISTRY)}"}
-    config = KPI_REGISTRY[kpi]
+    kpi_cfg = KPI_REGISTRY[kpi]
 
     if dimension is None:
-        total = base_query_set().aggregate(value=config["agg"])["value"]
-        columns, rows = ["label", "value"], [[config["label"], round(total)]]
+        total = base_query_set().aggregate(value=kpi_cfg["agg"])["value"]
+        columns, rows = ["label", "value"], [[kpi_cfg["label"], round_(total)]]
     else:
         if dimension not in DIMENSIONS:
             return {"error": f"Dimension inconnue : '{dimension}'. Valeurs possibles : {list(DIMENSIONS)}"}
         columns = [DIMENSION_COLUMNS[dimension], kpi]
         rows = [
-            [label, round(value)]
-            for label, value in aggregate_by_dimension(config, DIMENSIONS[dimension])
+            [label, round_(value)]
+            for label, value in aggregate_by_dimension(kpi_cfg, DIMENSIONS[dimension])
         ]
 
     result = store_and_preview(
         thread_id, columns, rows, source=f"get_kpi({kpi}, {dimension})", preview_rows=MAX_KPI_ROWS
     )
-    return {"kpi": kpi, "label": config["label"], "unit": config["unit"], "dimension": dimension, **result}
+    return {"kpi": kpi, "label": kpi_cfg["label"], "unit": kpi_cfg["unit"], "dimension": dimension, **result}
 
 
 # ============================ TOOL 4 : make_chart_tool =======================================================
@@ -227,7 +234,7 @@ def make_chart_tool(
     if not thread_id:
         return {"error": "Conversation non identifiée."}
 
-    variant1, error = variant(chart_type)
+    chart_variant, error = get_variant(chart_type)
     if error:
         return error
 
@@ -238,13 +245,13 @@ def make_chart_tool(
 
     measures = list(y_columns) if y_columns else [y_column]
 
-    error = check_columns(result, variant1, x_column, measures, series_column, size_column)
+    error = check_columns(result, chart_variant, x_column, measures, series_column, size_column)
     if error:
         return error
     error = check_numeric(result, measures)
     if error:
         return error
-    error = check_x_role(result, variant1, x_column)
+    error = check_x_role(result, chart_variant, x_column)
     if error:
         return error
     error = check_points(result, x_column)

@@ -30,6 +30,7 @@ ALLOWED_HOSTS = [h for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if 
 # Application definition
 # ---------------------------------------------------------------------------
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -40,6 +41,13 @@ INSTALLED_APPS = [
     'corsheaders',
     'chattodashboard',
 ]
+
+ASGI_APPLICATION = "config.asgi.application"
+
+AGENT_MAX_CONCURRENT_RUNS = 4       # questions traitées en même temps (selon les limites de Groq)
+AGENT_QUEUE_TIMEOUT = 15            # secondes d'attente avant « serveur occupé »
+AGENT_RATE_LIMIT_PER_HOUR = 30      # même limite que le throttle DRF du chat (la vue async n'utilise pas DRF)
+
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # At the top, before CommonMiddleware

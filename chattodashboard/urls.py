@@ -12,4 +12,5 @@ urlpatterns = [
         views.ChatResultView.as_view(),
         name="chat-result",
     ),
+    path("chat/astream/", views.chat_astream, name="chat-astream"),
 ]

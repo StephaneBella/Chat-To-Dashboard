@@ -3,6 +3,9 @@
 import re
 import sqlite3
 from functools import lru_cache
+import asyncio
+import aiosqlite
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from django.conf import settings
 from langchain_core.messages import AIMessage, HumanMessage
@@ -96,6 +99,33 @@ class LongTermMemory:
 def preferences_message(user_id):
     """Text to inject for a thread creation (None if there is nothing)."""
     prefs = LongTermMemory(user_id).preferences()
+    if not prefs:
+        return None
+    return "Préférences de l'utilisateur :\n" + "\n".join(f"- {p.content}" for p in prefs)
+
+
+# 3. Asunchronous versions (used by the async chat view)
+_async_saver = None
+_async_saver_lock = asyncio.Lock()
+
+async def get_async_checkpointer():
+    """
+    Async checkpointer, created once inside the server's event loop (it stays bound to it:
+    never use it from an ordinary thread). Same file and tables as the sync version.
+    """
+    global _async_saver
+    if _async_saver is None:
+        async with _async_saver_lock:
+            conn = await aiosqlite.connect(str(settings.AGENT_CHECKPOINT_DB))
+            await conn.execute("PRAGMA journal_mode=WAL")
+            _async_saver = AsyncSqliteSaver(conn)
+        return _async_saver
+
+
+
+async def apreferences_message(user_id):
+    """Async version of preferences_message (async ORM)."""
+    prefs = [p async for p in AgentMemory.objects.filter(user_id=user_id, kind="preference")[:10]]
     if not prefs:
         return None
     return "Préférences de l'utilisateur :\n" + "\n".join(f"- {p.content}" for p in prefs)

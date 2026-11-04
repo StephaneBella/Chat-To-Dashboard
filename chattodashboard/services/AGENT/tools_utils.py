@@ -1,23 +1,15 @@
-from datetime import date, datetime
-from pathlib import Path
+import functools
 import json
+import re
+from datetime import date, datetime
 from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
 
 from django.conf import settings
+from django.db import connections
 
 from ..aggregations import DIMENSIONS, KPIs, METRICS, aggregate_by_dimension, base_query_set
-from .results_store import (
-    ERR_EXPIRED,
-    keep_for_chart,
-    load_result,
-    push_chart,
-    rows_as_dicts,
-    save_derived,
-    store_and_preview,
-    thread_id_from,
-)
-import re
 
 DICTIONARY = Path(__file__).resolve().parent / "data_dictionary.md"
 
@@ -36,7 +28,6 @@ LONG_LABEL_COLUMNS = {"product_name", "city", "customer_name"}
 TIME_COLUMNS = {"annee_mois", "trimestre", "date"}
 
 # name of the first column of a get_kpi result, per dimension.
-# Same names as the SQL columns, so TIME_COLUMNS also applies to get_kpi results.
 DIMENSION_COLUMNS = {
     "client": "segment",
     "shipping_mode": "ship_mode",
@@ -49,8 +40,21 @@ DIMENSION_COLUMNS = {
 KPI_REGISTRY = {**KPIs, **METRICS}
 
 
+def release_db_connections(func):
+    """
+    Closes the thread's DB connections after a tool. Tools always run in worker threads
+    (LangGraph's pool or the async executor), which Django does not clean up by itself.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        finally:
+            connections.close_all()
+    return wrapper
+
+
 # ======================== UTILS FOR get_schema_tool & run_sql_tool =========================================
-@lru_cache(maxsize=1)
 @lru_cache(maxsize=1)
 def read_sections():
     """Découpe le dictionnaire en sections '## ...'. Renvoie ({titre: texte}, {table: texte})."""
@@ -64,6 +68,8 @@ def read_sections():
         else:
             general[title.strip()] = body.strip()
     return general, tables
+
+
 
 def to_json(value):
     if isinstance(value, (Decimal, float)):
@@ -85,18 +91,18 @@ def catalog_func():
     return {variant["id"]: variant for variant in variants}
 
 
-def variant(chart_type):
+def get_variant(chart_type):
     """The catalogue entry for 'chart_type', or a ready-to-return error."""
     try:
         catalog = catalog_func()
     except (OSError, ValueError) as exc:
         return None, {"error": f"Catalogue indisponible : {exc}"}
-    variant = catalog.get(chart_type)
-    if variant is None:
+    entry = catalog.get(chart_type)
+    if entry is None:
         return None, {
             "error": f"Type de graphique inconnu : '{chart_type}'. Valeurs possibles : {sorted(catalog)}"
         }
-    return variant, None
+    return entry, None
 
 
 # 'result' below is {"columns": [...], "rows": [{column: value}, ...]}

@@ -28,6 +28,21 @@ from .services.aggregations import get_dashboard_payload
 from .services.ETL.extract import SourceFileError
 from .services.ETL.run_etl import ETLAlreadyRunning, ensure_dw_loaded, run_etl_safely
 
+import asyncio
+import json
+import time
+
+from asgiref.sync import sync_to_async
+from django.conf import settings
+from django.db import connections
+from django.http import Http404, HttpResponseNotAllowed, JsonResponse, StreamingHttpResponse
+from django.shortcuts import aget_object_or_404
+
+from .models import ChatThread, FactSales          # FactSales s'ajoute à ChatThread
+from .services.AGENT.agent import AgentBusy, AgentError, astream_agent, run_agent
+
+
+
 logger = logging.getLogger(__name__)
 
 CHAT_LOCK_TTL = 300  # seconds : maximum duration of a question
@@ -53,9 +68,25 @@ class StaticDashboardView(APIView):
     def get(self, request):
         params = DashboardQuerySerializer(data=request.query_params)
         params.is_valid(raise_exception=True)
-        kpi = params.validated_data['kpi']
+        kpi = params.validated_data["kpi"]
+
+        try:
+            ensure_dw_loaded()   # first call: loads the default file if the DW is empty
+        except ETLAlreadyRunning:
+            return Response(
+                {"error": "Chargement des données en cours, réessaie dans quelques secondes."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                headers={"Retry-After": "10"},
+            )
+        except (SourceFileError, FileNotFoundError) as exc:
+            return Response(
+                {"error": f"Chargement initial des données impossible : {exc}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         return Response(get_dashboard_payload(kpi))
+
+
 
 class ETLRefreshView(GenericAPIView):
     """
@@ -140,6 +171,11 @@ class ChatView(GenericAPIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 headers={"Retry-After": "10"},
             )
+        except (SourceFileError, FileNotFoundError) as exc:
+            return Response(
+                {"error": f"Chargement initial des données impossible : {exc}"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         if thread_id:
             # 404 if the thread doesn't exist or beyonds to another person
@@ -213,3 +249,112 @@ class ChatResultView(APIView):
         if result is None:
             return Response({"error": ERR_EXPIRED}, status=status.HTTP_404_NOT_FOUND)
         return Response({"columns": result["columns"], "rows": rows_as_dicts(result)})
+
+
+# ---------------------------------------------------------------------------
+# Async chat (streaming)
+# ---------------------------------------------------------------------------
+_background_tasks = set()   # strong references: otherwise Python may destroy a running task
+
+
+def _sse(event, data):
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _ensure_dw_in_thread():
+    try:
+        ensure_dw_loaded()
+    finally:
+        connections.close_all()   # this thread is not managed by Django
+
+
+async def _rate_limited(user_id):
+    cache = caches["default"]
+    key = f"chat_rate:{user_id}:{int(time.time() // 3600)}"   # one window per hour
+    await cache.aadd(key, 0, 3600)
+    return await cache.aincr(key) > settings.AGENT_RATE_LIMIT_PER_HOUR
+
+
+async def _produce(queue, message, thread, user_id, lock_key, token):
+    """
+    Runs the agent in a task that is INDEPENDENT from the HTTP connection:
+    if the browser disconnects, the agent still finishes and the thread stays consistent.
+    """
+    try:
+        async for name, data in astream_agent(message, thread, user_id):
+            if name == "done":
+                await thread.asave(update_fields=["updated_at"])
+                data = {"thread_id": str(thread.id), **data}
+            await queue.put((name, data))
+    except AgentBusy:
+        await queue.put(("error", {"error": "Le serveur est occupé, réessaie dans un instant."}))
+    except AgentError:
+        await queue.put(("error", {"error": "L'assistant est momentanément indisponible."}))
+    except Exception:
+        logger.exception("Flux de chat interrompu (thread %s)", thread.id)
+        await queue.put(("error", {"error": "Erreur interne."}))
+    finally:
+        locks = caches["agent_results"]
+        if locks.get(lock_key) == token:   # only delete if it is still ours
+            locks.delete(lock_key)
+        await queue.put(None)              # tells the stream it is over
+
+
+async def chat_astream(request):
+    """POST /api/chat/astream/  {"message": "...", "thread_id": "<uuid, optional>"} -> event stream."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    user = await request.auser()
+    if not user.is_authenticated:
+        return JsonResponse({"detail": "Authentification requise."}, status=403)
+
+    try:
+        payload = json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"error": "Corps JSON invalide."}, status=400)
+    params = ChatRequestSerializer(data=payload)
+    if not params.is_valid():
+        return JsonResponse(dict(params.errors), status=400)
+    message = params.validated_data["message"]
+    thread_id = params.validated_data.get("thread_id")
+
+    if await _rate_limited(user.id):
+        return JsonResponse({"error": "Limite de questions atteinte, réessaie plus tard."},
+                            status=429, headers={"Retry-After": "3600"})
+
+    if not await FactSales.objects.aexists():
+        try:
+            await sync_to_async(_ensure_dw_in_thread, thread_sensitive=False)()
+        except ETLAlreadyRunning:
+            return JsonResponse({"error": "Chargement des données en cours, réessaie dans quelques secondes."},
+                                status=503, headers={"Retry-After": "10"})
+        except (SourceFileError, FileNotFoundError) as exc:
+            return JsonResponse({"error": f"Chargement initial des données impossible : {exc}"}, status=503)
+
+    if thread_id:
+        try:
+            thread = await aget_object_or_404(ChatThread, id=thread_id, user=user)
+        except Http404:
+            return JsonResponse({"error": "Conversation introuvable."}, status=404)
+    else:
+        thread = await ChatThread.objects.acreate(user=user, title=message[:60])
+
+    lock_key = f"chat_lock:{thread.id}"
+    token = uuid.uuid4().hex
+    if not await caches["agent_results"].aadd(lock_key, token, CHAT_LOCK_TTL):
+        return JsonResponse({"error": "Une question est déjà en cours dans cette conversation."}, status=409)
+
+    queue = asyncio.Queue()
+    task = asyncio.create_task(_produce(queue, message, thread, user.id, lock_key, token))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    async def events():
+        while (item := await queue.get()) is not None:
+            yield _sse(*item)
+
+    response = StreamingHttpResponse(events(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
