@@ -7,7 +7,7 @@ const MESSAGES = [
   "Synthèse de la réponse…",
 ];
 
-export function ThinkingIndicator() {
+export function ThinkingIndicator({ label }: { label?: string }) {
   const [index, setIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
@@ -37,7 +37,7 @@ export function ThinkingIndicator() {
       </div>
       <div className="flex flex-col">
         <span className="text-[12px] text-on-surface">
-          {MESSAGES[index]}
+          {label ?? MESSAGES[index]}
         </span>
         {elapsed >= 3 && (
           <span className="text-[10px] text-outline">

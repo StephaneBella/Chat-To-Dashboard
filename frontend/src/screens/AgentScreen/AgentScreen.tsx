@@ -6,7 +6,7 @@ import {
   fetchAgentResultRows,
   getThread,
   listThreads,
-  postAgentChat,
+  streamAgentChat,
   type AgentChartPayload,
   type ThreadSummary,
 } from "../../api/agentChat";
@@ -14,7 +14,6 @@ import { ApiError } from "../../api/http";
 import { AppHeader } from "../../components/AppHeader";
 import type { Row } from "../../chart-engine";
 import { useAuth } from "../../auth/AuthProvider";
-import { useNavigate } from "react-router-dom";
 import { useTypewriter } from "../../hooks/useTypewriter";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ChartCard } from "./ChartCard";
@@ -29,6 +28,8 @@ interface Turn {
   rows: Row[];
   failed: boolean;
   animate: boolean;
+  streaming?: boolean;
+  status?: string;
 }
 
 const SUGGESTIONS = [
@@ -47,7 +48,15 @@ function AgentAvatar() {
   );
 }
 
-function TypewriterAnswer({ text, animate }: { text: string; animate: boolean }) {
+function TypewriterAnswer({
+  text,
+  animate,
+  streaming = false,
+}: {
+  text: string;
+  animate: boolean;
+  streaming?: boolean;
+}) {
   const { displayed, done, skip } = useTypewriter(text, { speed: 16, enabled: animate });
   return (
     <div
@@ -69,7 +78,9 @@ function TypewriterAnswer({ text, animate }: { text: string; animate: boolean })
       >
         {displayed}
       </ReactMarkdown>
-      {animate && !done && <span className="ml-1 inline-block h-4 w-[1px] animate-pulse bg-primary align-middle" />}
+      {(streaming || (animate && !done)) && (
+        <span className="ml-1 inline-block h-4 w-[1px] animate-pulse bg-primary align-middle" />
+      )}
     </div>
   );
 }
@@ -78,7 +89,6 @@ export default function AgentScreen() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
@@ -92,9 +102,9 @@ export default function AgentScreen() {
   const nextId = useRef(1);
   const conversationVersion = useRef(0);
   const activeSendVersion = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const { status } = useAuth();
-  const navigate = useNavigate();
 
   // Auth bypassed for dev
 
@@ -117,17 +127,18 @@ export default function AgentScreen() {
   }, [status, loadThreads]);
 
   useEffect(() => {
-    if (turns.length === 0 && !pendingQuestion) return;
+    if (turns.length === 0) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns, pendingQuestion]);
+  }, [turns]);
 
   const reset = useCallback(() => {
     conversationVersion.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setTurns([]);
     setThreadId(undefined);
     setInput("");
     setPending(false);
-    setPendingQuestion(null);
     setActiveChart(null);
     setShowMobileChart(false);
     nextId.current = 1;
@@ -155,27 +166,83 @@ export default function AgentScreen() {
       const requestVersion = conversationVersion.current;
       activeSendVersion.current = requestVersion;
       const id = nextId.current++;
+      const controller = new AbortController();
+      abortRef.current?.abort();
+      abortRef.current = controller;
+
       setPending(true);
-      setPendingQuestion(trimmed);
       setInput("");
+      setTurns((previous) => [
+        ...previous,
+        {
+          id,
+          question: trimmed,
+          answer: "",
+          chart: null,
+          rows: [],
+          failed: false,
+          animate: false,
+          streaming: true,
+        },
+      ]);
+
+      const patchTurn = (patch: (turn: Turn) => Turn) => {
+        if (requestVersion !== conversationVersion.current) return;
+        setTurns((previous) =>
+          previous.map((turn) => (turn.id === id ? patch(turn) : turn)),
+        );
+      };
+
+      let streamedAnswer = "";
+      const outcome: {
+        answer: string;
+        chart: AgentChartPayload | null;
+        threadId?: string;
+      } = { answer: "", chart: null, threadId };
+      let streamError: string | null = null;
 
       try {
-        const response = await postAgentChat({
-          message: trimmed,
-          thread_id: threadId,
-        });
+        await streamAgentChat(
+          { message: trimmed, thread_id: threadId, signal: controller.signal },
+          {
+            onStatus: (status) => {
+              patchTurn((turn) => ({ ...turn, status: status.label }));
+            },
+            onToken: (text) => {
+              streamedAnswer += text;
+              patchTurn((turn) => ({
+                ...turn,
+                answer: turn.answer + text,
+                status: undefined,
+              }));
+            },
+            onDone: (response) => {
+              outcome.answer = response.answer;
+              outcome.chart = response.chart ?? null;
+              if (response.thread_id) {
+                outcome.threadId = response.thread_id;
+                if (requestVersion === conversationVersion.current) {
+                  setThreadId(response.thread_id);
+                }
+              }
+            },
+            onError: (message) => {
+              streamError = message;
+            },
+          },
+        );
+
         if (requestVersion !== conversationVersion.current) return;
-        if (response.thread_id) {
-          setThreadId(response.thread_id);
+        if (streamError) {
+          throw new ApiError(0, streamError);
         }
 
         let rows: Row[] = [];
-        let chart: AgentChartPayload | null = null;
-        if (response.chart) {
-          chart = response.chart;
+        const chart = outcome.chart;
+        if (chart) {
           try {
             const fetched = await fetchAgentResultRows(
-              response.thread_id ?? threadId ?? "",
+              outcome.threadId ?? threadId ?? "",
               chart.result_id,
             );
             if (requestVersion !== conversationVersion.current) return;
@@ -184,20 +251,20 @@ export default function AgentScreen() {
             rows = [];
           }
         }
-        if (requestVersion !== conversationVersion.current) return;
 
-        setTurns((previous) => [
-          ...previous,
-          {
-            id,
-            question: trimmed,
-            answer: response.answer,
-            chart,
-            rows,
-            failed: false,
-            animate: true,
-          },
-        ]);
+        const answer =
+          outcome.answer ||
+          streamedAnswer ||
+          "Je n’ai pas pu formuler de réponse complète.";
+        patchTurn((turn) => ({
+          ...turn,
+          answer,
+          chart,
+          rows,
+          failed: false,
+          streaming: false,
+          status: undefined,
+        }));
 
         if (chart && rows.length > 0) {
           setActiveChart({ turnId: id, chart, rows });
@@ -207,6 +274,7 @@ export default function AgentScreen() {
         void loadThreads();
       } catch (error) {
         if (requestVersion !== conversationVersion.current) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
         let message =
           "Désolé, je n’ai pas pu obtenir de réponse du serveur. Vérifiez que le backend est démarré, puis réessayez.";
         if (error instanceof ApiError) {
@@ -214,25 +282,24 @@ export default function AgentScreen() {
         } else if (error instanceof Error) {
           message = error.message || message;
         }
-        setTurns((previous) => [
-          ...previous,
-          {
-            id,
-            question: trimmed,
-            answer: message,
-            chart: null,
-            rows: [],
-            failed: true,
-            animate: true,
-          },
-        ]);
+        patchTurn((turn) => ({
+          ...turn,
+          answer: message,
+          chart: null,
+          rows: [],
+          failed: true,
+          streaming: false,
+          status: undefined,
+        }));
       } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
         if (activeSendVersion.current === requestVersion) {
           activeSendVersion.current = null;
         }
         if (requestVersion === conversationVersion.current) {
           setPending(false);
-          setPendingQuestion(null);
         }
       }
     },
@@ -241,8 +308,9 @@ export default function AgentScreen() {
 
   const selectThread = useCallback(async (id: string) => {
     const requestVersion = ++conversationVersion.current;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setPending(false);
-    setPendingQuestion(null);
     try {
       const detail = await getThread(id);
       if (requestVersion !== conversationVersion.current) return;
@@ -319,7 +387,7 @@ export default function AgentScreen() {
             </button>
             <div className="flex-1 overflow-auto px-4 pb-32 pt-6 lg:px-8">
               <div className="mx-auto w-full max-w-3xl">
-                {turns.length === 0 && !pendingQuestion && (
+                {turns.length === 0 && (
                   <section className="animate-fade-up relative overflow-hidden rounded-3xl border border-outline-variant/60 bg-white p-6 shadow-soft lg:p-8">
                     <div className="relative flex items-start gap-4">
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-primary/25">
@@ -379,7 +447,15 @@ export default function AgentScreen() {
                         <AgentAvatar />
                         <div className="min-w-0 flex-1 space-y-2">
                           {!turn.failed ? (
-                            <TypewriterAnswer text={turn.answer} animate={turn.animate} />
+                            turn.streaming && !turn.answer ? (
+                              <ThinkingIndicator label={turn.status} />
+                            ) : (
+                              <TypewriterAnswer
+                                text={turn.answer}
+                                animate={turn.animate}
+                                streaming={turn.streaming}
+                              />
+                            )
                           ) : (
                             <div className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700 sm:flex-row sm:items-center sm:justify-between">
                               <div className="flex items-start gap-2">
@@ -432,26 +508,6 @@ export default function AgentScreen() {
                       </div>
                     </article>
                   ))}
-
-                  {pendingQuestion && (
-                    <article className="animate-fade-up space-y-3">
-                      <div className="flex items-start justify-end gap-2">
-                        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-gradient-to-br from-emerald-600 to-teal-600 px-4 py-2.5 text-[13px] font-medium text-white shadow-md shadow-primary/20">
-                          {pendingQuestion}
-                        </div>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-outline-variant/60 bg-white text-outline shadow-sm">
-                          <span className="material-symbols-outlined text-[18px]">
-                            person
-                          </span>
-                        </span>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <AgentAvatar />
-                        <ThinkingIndicator />
-                      </div>
-                    </article>
-                  )}
 
                   <div ref={bottomRef} />
                 </div>

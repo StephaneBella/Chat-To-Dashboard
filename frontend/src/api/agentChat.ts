@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { requestJson } from "./http";
+import {
+  API_BASE,
+  ApiError,
+  ensureCsrfToken,
+  extractErrorMessage,
+  getCsrfToken,
+  requestJson,
+} from "./http";
 import type { Row } from "../chart-engine";
 
 const ColumnRefSchema = z.object({
@@ -99,6 +106,221 @@ export async function postAgentChat(
   return parsed.data;
 }
 
+export interface AgentStreamStatus {
+  tool: string;
+  label: string;
+}
+
+export interface AgentStreamHandlers {
+  onStatus?: (status: AgentStreamStatus) => void;
+  onToken?: (text: string) => void;
+  onDone?: (response: AgentChatResponse) => void;
+  onError?: (message: string) => void;
+}
+
+interface SseEvent {
+  event: string;
+  data: string;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function nextEventBoundary(buffer: string): { index: number; length: number } | null {
+  const lf = buffer.indexOf("\n\n");
+  const crlf = buffer.indexOf("\r\n\r\n");
+  if (lf === -1 && crlf === -1) return null;
+  if (crlf !== -1 && (lf === -1 || crlf < lf)) {
+    return { index: crlf, length: 4 };
+  }
+  return { index: lf, length: 2 };
+}
+
+function parseSseEvent(raw: string): SseEvent | null {
+  let event = "message";
+  const data: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line || line.startsWith(":")) continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" ")) value = value.slice(1);
+    if (field === "event") event = value;
+    else if (field === "data") data.push(value);
+  }
+  if (data.length === 0) return null;
+  return { event, data: data.join("\n") };
+}
+
+function dispatchSseEvent(
+  event: string,
+  data: string,
+  handlers: AgentStreamHandlers,
+): void {
+  let payload: unknown;
+  try {
+    payload = data ? JSON.parse(data) : null;
+  } catch {
+    return;
+  }
+  const record =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+
+  switch (event) {
+    case "status":
+      if (typeof record.label === "string") {
+        handlers.onStatus?.({
+          tool: typeof record.tool === "string" ? record.tool : "",
+          label: record.label,
+        });
+      }
+      break;
+    case "token":
+      if (typeof record.text === "string" && record.text.length > 0) {
+        handlers.onToken?.(record.text);
+      }
+      break;
+    case "done": {
+      const parsed = AgentChatResponseSchema.safeParse(payload);
+      if (parsed.success) {
+        handlers.onDone?.(parsed.data);
+      } else {
+        handlers.onError?.("Réponse finale inattendue du serveur.");
+      }
+      break;
+    }
+    case "error":
+      handlers.onError?.(
+        typeof record.error === "string"
+          ? record.error
+          : "Erreur interne du serveur.",
+      );
+      break;
+    default:
+      break;
+  }
+}
+
+function drainSseBuffer(
+  buffer: string,
+  handlers: AgentStreamHandlers,
+): string {
+  let rest = buffer;
+  for (;;) {
+    const boundary = nextEventBoundary(rest);
+    if (!boundary) return rest;
+    const raw = rest.slice(0, boundary.index);
+    rest = rest.slice(boundary.index + boundary.length);
+    const parsed = parseSseEvent(raw);
+    if (parsed) dispatchSseEvent(parsed.event, parsed.data, handlers);
+  }
+}
+
+function defaultHttpMessage(status: number): string {
+  switch (status) {
+    case 401:
+    case 403:
+      return "Authentification requise. Veuillez vous connecter.";
+    case 409:
+      return "Une question est déjà en cours dans cette conversation.";
+    case 429:
+      return "Trop de questions. Réessayez plus tard.";
+    case 502:
+      return "L'assistant est momentanément indisponible. Réessayez dans un instant.";
+    case 503:
+      return "Chargement des données en cours, réessayez dans quelques secondes.";
+    default:
+      return `Erreur serveur (HTTP ${status}).`;
+  }
+}
+
+/**
+ * POST /api/chat/astream/ -> Server-Sent Events.
+ *
+ * Events: "status" {tool,label}, "token" {text}, "done" {answer,chart,thread_id},
+ * "error" {error}. The promise resolves when the stream ends; a server-side
+ * error event is reported through `onError`.
+ */
+export async function streamAgentChat(
+  params: AgentChatParams,
+  handlers: AgentStreamHandlers = {},
+): Promise<void> {
+  const headers = new Headers({
+    Accept: "text/event-stream",
+    "Content-Type": "application/json",
+  });
+  let csrf = getCsrfToken();
+  if (!csrf) csrf = await ensureCsrfToken();
+  if (csrf) headers.set("X-CSRFToken", csrf);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/chat/astream/`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        message: params.message,
+        thread_id: params.thread_id,
+      }),
+      credentials: "include",
+      signal: params.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new ApiError(
+      0,
+      "Impossible de joindre le serveur. Vérifiez que Django est démarré, puis réessayez.",
+    );
+  }
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    let body: unknown;
+    try {
+      body = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+    } catch {
+      body = null;
+    }
+    const message =
+      typeof body === "string" && body.trim().length > 0
+        ? body.trim()
+        : extractErrorMessage(body) ?? defaultHttpMessage(response.status);
+    throw new ApiError(response.status, message);
+  }
+
+  if (!response.body) {
+    throw new ApiError(0, "Le serveur n'a pas renvoyé de flux de réponse.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = drainSseBuffer(buffer, handlers);
+    }
+    buffer += decoder.decode();
+    if (buffer.trim().length > 0) {
+      const parsed = parseSseEvent(buffer);
+      if (parsed) dispatchSseEvent(parsed.event, parsed.data, handlers);
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function fetchAgentResultRows(
   threadId: string,
   resultId: string,
@@ -116,7 +338,7 @@ export async function fetchAgentResultRows(
     }
     if (Array.isArray(row)) {
       const obj: Row = {};
-      columns.forEach((col, idx) => {
+      columns.forEach((col: string, idx: number) => {
         obj[col] = row[idx];
       });
       return obj;

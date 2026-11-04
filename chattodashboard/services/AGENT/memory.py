@@ -116,10 +116,11 @@ async def get_async_checkpointer():
     global _async_saver
     if _async_saver is None:
         async with _async_saver_lock:
-            conn = await aiosqlite.connect(str(settings.AGENT_CHECKPOINT_DB))
-            await conn.execute("PRAGMA journal_mode=WAL")
-            _async_saver = AsyncSqliteSaver(conn)
-        return _async_saver
+            if _async_saver is None:
+                conn = await aiosqlite.connect(str(settings.AGENT_CHECKPOINT_DB))
+                await conn.execute("PRAGMA journal_mode=WAL")
+                _async_saver = AsyncSqliteSaver(conn)
+    return _async_saver
 
 
 

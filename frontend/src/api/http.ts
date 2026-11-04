@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 const API_BASE_RAW =
   (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/+$/, "");
 
@@ -29,7 +27,7 @@ export function getCsrfToken(): string | null {
   return getCookie("csrftoken");
 }
 
-async function ensureCsrfToken(): Promise<string | null> {
+export async function ensureCsrfToken(): Promise<string | null> {
   let token = getCsrfToken();
   if (token) return token;
   try {
@@ -44,7 +42,7 @@ async function ensureCsrfToken(): Promise<string | null> {
   }
 }
 
-function extractErrorMessage(body: unknown): string | null {
+export function extractErrorMessage(body: unknown): string | null {
   if (!body || typeof body !== "object") return null;
   const record = body as Record<string, unknown>;
   if (typeof record.error === "string") return record.error;
