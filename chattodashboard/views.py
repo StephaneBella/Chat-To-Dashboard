@@ -2,6 +2,7 @@
 import logging
 import os
 import tempfile
+import uuid
 
 
 
@@ -23,13 +24,13 @@ from .serializers import DashboardQuerySerializer, ETLRefreshSerializer, ChatReq
 from .services.AGENT.agent import AgentError, run_agent
 from .services.AGENT.memory import delete_thread, get_history
 from .services.AGENT.results_store import ERR_EXPIRED, load_result, rows_as_dicts
-from .services.aggregations import get_all_charts, get_dashboard_options, get_summary_cards
+from .services.aggregations import get_dashboard_payload
 from .services.ETL.extract import SourceFileError
 from .services.ETL.run_etl import ETLAlreadyRunning, ensure_dw_loaded, run_etl_safely
 
 logger = logging.getLogger(__name__)
 
-CHAT_LOCK_TTL = 120  # seconds : maximum duration of a question
+CHAT_LOCK_TTL = 300  # seconds : maximum duration of a question
 
 
 
@@ -54,14 +55,7 @@ class StaticDashboardView(APIView):
         params.is_valid(raise_exception=True)
         kpi = params.validated_data['kpi']
 
-        return Response(
-            {
-                "options": get_dashboard_options(),
-                "kpi_cards": kpi,
-                **get_summary_cards(),
-                "charts": get_all_charts(kpi),
-            }
-        ) 
+        return Response(get_dashboard_payload(kpi))
 
 class ETLRefreshView(GenericAPIView):
     """
@@ -156,8 +150,9 @@ class ChatView(GenericAPIView):
         # One single question per chat (if not the thread state shuffles)
         # Dedicated alias : the ETL process empty the default cache, not this one
         locks = caches["agent_results"]
-        lock_key = f"chat_lock:{thread_id}"
-        if not locks.add(lock_key, True, CHAT_LOCK_TTL):
+        lock_key = f"chat_lock:{thread.id}"
+        token = uuid.uuid4().hex
+        if not locks.add(lock_key, token, CHAT_LOCK_TTL):
             return Response(
                 {"error": "Une question est déjà en cours dans cette conversation."},
                 status=status.HTTP_409_CONFLICT,
@@ -169,9 +164,9 @@ class ChatView(GenericAPIView):
                 {"error": "L'assistant est momentanément indisponible. Réessaie dans un instant."},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-
         finally:
-            locks.delete(lock_key)
+            if locks.get(lock_key) == token:  # only delete if it is still ours
+                locks.delete(lock_key)
 
         thread.save(update_fields=["updated_at"])  # put the conversation at the top of the list
         return Response({"thread_id": str(thread.id), **result})

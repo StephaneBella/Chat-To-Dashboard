@@ -15,6 +15,7 @@ from .transform import (
 )
 
 ETL_LOCK_KEY = 'etl_running'
+DW_LOADED_KEY = "dw_loaded"
 MODES = ("replace", "append")
 
 
@@ -132,6 +133,7 @@ def run_etl_safely(source_file=None, mode="replace"):
     try:
         result = run_etl(source_file, mode)
         cache.clear()  # the dashboard should reflect the new data
+        cache.set(DW_LOADED_KEY, True, None) # setting the cache to show that dw was loaded
         return result
     finally:
         cache.delete(ETL_LOCK_KEY)
@@ -139,5 +141,10 @@ def run_etl_safely(source_file=None, mode="replace"):
 
 def ensure_dw_loaded():
     """Load the default file if the DW is empty (first call)"""
+
+    # added the cache logic to reduce one unnecessary  request per chat
+    if cache.get(DW_LOADED_KEY):
+        return
     if not FactSales.objects.exists():
         run_etl_safely()
+    cache.set(DW_LOADED_KEY, True, None)

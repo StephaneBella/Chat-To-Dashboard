@@ -112,6 +112,7 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", "91106"),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", "5432"),  # PostgreSQL default is 5432
+        "CONN_MAX_AGE": 600,  # reuse connections, including in the parallel workers
     }
 }
 

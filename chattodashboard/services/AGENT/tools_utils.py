@@ -50,6 +50,8 @@ KPI_REGISTRY = {**KPIs, **METRICS}
 
 
 # ======================== UTILS FOR get_schema_tool & run_sql_tool =========================================
+@lru_cache(maxsize=1)
+@lru_cache(maxsize=1)
 def read_sections():
     """Découpe le dictionnaire en sections '## ...'. Renvoie ({titre: texte}, {table: texte})."""
     text = DICTIONARY.read_text(encoding="utf-8")

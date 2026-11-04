@@ -2,6 +2,7 @@ from django.db.models import Count, ExpressionWrapper, F, Q, FloatField, Sum, Va
 from django.db.models.functions import NullIf
 
 from ..models import FactSales, FactOrders
+from .concurrency import run_parallel
 
 
 # Define orders with negative profit
@@ -162,11 +163,14 @@ def get_chart_data(kpi, dimension, year=None):
 
 
 def get_all_charts(kpi):
-    """The five dashboard's charts for the same KPI"""
-    return {
-        dim: get_chart_data(kpi, dim) 
+    """The five dashboard's charts for the same KPI, computed concurrently."""
+    tasks = {
+        dim: (lambda d=dim: get_chart_data(kpi, d))
         for dim in DIMENSIONS
     }
+    results = run_parallel(tasks)
+    # Rebuild in the original order so the API output stays deterministic.
+    return {dim: results[dim] for dim in DIMENSIONS}
 
 
 def get_dashboard_options():
@@ -183,4 +187,19 @@ def get_dashboard_options():
         "dimensions": [
             {"key": k, "label": v["label"], "chart_type": v["chart_type"]} for k, v in DIMENSIONS.items()
         ],
+    }
+
+
+def get_dashboard_payload(kpi):
+    """Everything the dashboard needs, with the independent DB queries in parallel."""
+    tasks = {
+        "summary": get_summary_cards,
+        **{dim: (lambda d=dim: get_chart_data(kpi, d)) for dim in DIMENSIONS},
+    }
+    results = run_parallel(tasks)
+    return {
+        "options": get_dashboard_options(),
+        "kpi_cards": kpi,
+        **results["summary"],
+        "charts": {dim: results[dim] for dim in DIMENSIONS},
     }
